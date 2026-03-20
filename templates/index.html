@@ -7,11 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,600;1,9..144,300&display=swap" rel="stylesheet">
   <style>
-    :root {
-      --bg:#0e0e0e; --surface:#161616; --surface2:#1e1e1e;
-      --border:#2a2a2a; --accent:#c8f060; --accent2:#60c8f0;
-      --text:#e8e8e0; --muted:#666; --danger:#f06060;
-    }
+    :root{--bg:#0e0e0e;--surface:#161616;--surface2:#1e1e1e;--border:#2a2a2a;--accent:#c8f060;--accent2:#60c8f0;--text:#e8e8e0;--muted:#666;--danger:#f06060}
     *{box-sizing:border-box;margin:0;padding:0}
     body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;font-size:13px;min-height:100vh;display:flex;flex-direction:column}
     header{padding:20px 28px 16px;border-bottom:1px solid var(--border);display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-shrink:0}
@@ -49,12 +45,18 @@
     table{width:100%;border-collapse:collapse}
     thead tr{border-bottom:1px solid var(--border);background:var(--surface);position:sticky;top:0;z-index:10}
     th{padding:9px 14px;text-align:left;font-size:10px;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);font-weight:500;white-space:nowrap}
-    tbody tr{border-bottom:1px solid var(--border);transition:background .1s}
-    tbody tr:hover{background:var(--surface2)}
-    td{padding:9px 14px;color:var(--text);vertical-align:middle;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-    td.name{font-weight:500;color:#fff;max-width:160px}
-    td.email a,td.website a{color:var(--accent2);text-decoration:none}
-    td.email a:hover,td.website a:hover{text-decoration:underline}
+    tbody tr.data-row{border-bottom:none;transition:background .1s;cursor:pointer}
+    tbody tr.data-row:hover{background:var(--surface2)}
+    tbody tr.bio-row{border-bottom:1px solid var(--border)}
+    tbody tr.bio-row td{padding:0}
+    .bio-inner{padding:0 14px 12px 14px;color:var(--muted);font-size:12px;line-height:1.6;max-width:900px;display:none}
+    .bio-inner.open{display:block}
+    td{padding:9px 14px;color:var(--text);vertical-align:middle;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    td.name-cell{font-weight:500;color:#fff;max-width:160px}
+    td.email-cell a{color:var(--accent2);text-decoration:none}
+    td.email-cell a:hover{text-decoration:underline}
+    .expand-icon{color:var(--muted);font-size:11px;transition:transform .2s;display:inline-block;margin-right:4px}
+    .expand-icon.open{transform:rotate(90deg)}
     .tag{display:inline-block;padding:2px 7px;border-radius:3px;font-size:10px;letter-spacing:.07em;text-transform:uppercase}
     .tag-valid{background:rgba(200,240,96,.12);color:var(--accent);border:1px solid rgba(200,240,96,.25)}
     .tag-invalid{background:rgba(240,96,96,.12);color:var(--danger);border:1px solid rgba(240,96,96,.25)}
@@ -70,17 +72,17 @@
     .page-btn:disabled{opacity:.3;cursor:default}
     .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:100;align-items:center;justify-content:center}
     .modal-overlay.open{display:flex}
-    .modal{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:26px;width:500px;max-width:95vw}
+    .modal{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:26px;width:520px;max-width:95vw;max-height:90vh;overflow-y:auto}
     .modal h3{font-family:'Fraunces',serif;font-size:17px;font-weight:600;margin-bottom:16px}
     .modal-field{margin-bottom:11px}
     .modal-field label{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:4px}
     .modal-field input,.modal-field textarea,.modal-field select{width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'DM Mono',monospace;font-size:12px;padding:7px 11px;border-radius:4px}
     .modal-field textarea{resize:vertical;min-height:70px}
+    .modal-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
     .modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:18px}
-    .enrich-modal{width:420px}
-    .enrich-modal p{color:var(--muted);font-size:12px;line-height:1.6;margin-bottom:14px}
     .progress-bar{height:4px;background:var(--border);border-radius:2px;overflow:hidden;margin-top:8px}
     .progress-fill{height:100%;background:var(--accent);transition:width .3s}
+    .enrich-modal p{color:var(--muted);font-size:12px;line-height:1.6;margin-bottom:14px}
   </style>
 </head>
 <body>
@@ -101,7 +103,6 @@
 <div class="toolbar">
   <input type="text" class="search-input" placeholder="Search name, firm, email…" id="search-input"/>
   <select id="state-filter"><option value="">All States</option></select>
-  <input type="text" id="city-filter" placeholder="City…" style="width:120px"/>
   <button class="btn btn-primary" id="scrape-btn" onclick="startScrape()">▶ Scrape IBBA</button>
   <button class="btn btn-enrich" id="enrich-btn" onclick="openEnrichModal()">⚡ Enrich Profiles</button>
   <button class="btn btn-secondary" onclick="exportCSV()">↓ CSV</button>
@@ -111,12 +112,10 @@
 </div>
 
 <div id="scrape-bar" class="status-bar scrape hidden">
-  <div class="spinner"></div>
-  <span id="scrape-msg">Scraping…</span>
+  <div class="spinner"></div><span id="scrape-msg">Scraping…</span>
 </div>
 <div id="enrich-bar" class="status-bar enrich hidden">
-  <div class="spinner"></div>
-  <span id="enrich-msg">Enriching…</span>
+  <div class="spinner"></div><span id="enrich-msg">Enriching…</span>
   <div style="flex:1;margin-left:12px"><div class="progress-bar"><div class="progress-fill" id="enrich-progress" style="width:0%"></div></div></div>
 </div>
 
@@ -125,14 +124,14 @@
     <table>
       <thead>
         <tr>
+          <th style="width:24px"></th>
           <th>Name</th>
           <th>Firm</th>
-          <th>City</th>
           <th>State</th>
           <th>Email</th>
           <th>Phone</th>
           <th>Website</th>
-          <th>IBBA Profile</th>
+          <th>IBBA</th>
           <th>Email Status</th>
           <th>In Reply</th>
           <th></th>
@@ -152,17 +151,24 @@
 <div class="modal-overlay" id="edit-modal">
   <div class="modal">
     <h3 id="modal-title">Edit Broker</h3>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><div class="modal-field"><label>First / Full Name</label><input type="text" id="modal-name" placeholder="Name"/></div><div class="modal-field"><label>Firm</label><input type="text" id="modal-firm" placeholder="Firm name"/></div></div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><div class="modal-field"><label>City</label><input type="text" id="modal-city" placeholder="City"/></div><div class="modal-field"><label>State</label><input type="text" id="modal-state" placeholder="State"/></div></div>
-    <div class="modal-field"><label>Email</label><input type="text" id="modal-email" placeholder="email@domain.com"/></div>
-    <div class="modal-field"><label>Phone</label><input type="text" id="modal-phone" placeholder="Phone number"/></div>
-    <div class="modal-field"><label>Email Status (Bouncer)</label>
-      <select id="modal-bouncer">
-        <option value="unchecked">Unchecked</option>
-        <option value="valid">Valid</option>
-        <option value="invalid">Invalid</option>
-        <option value="risky">Risky</option>
-      </select>
+    <div class="modal-grid">
+      <div class="modal-field"><label>Name</label><input type="text" id="modal-name"/></div>
+      <div class="modal-field"><label>Firm</label><input type="text" id="modal-firm"/></div>
+    </div>
+    <div class="modal-grid">
+      <div class="modal-field"><label>Email</label><input type="text" id="modal-email"/></div>
+      <div class="modal-field"><label>Phone</label><input type="text" id="modal-phone"/></div>
+    </div>
+    <div class="modal-grid">
+      <div class="modal-field"><label>State</label><input type="text" id="modal-state"/></div>
+      <div class="modal-field"><label>Email Status</label>
+        <select id="modal-bouncer">
+          <option value="unchecked">Unchecked</option>
+          <option value="valid">Valid</option>
+          <option value="invalid">Invalid</option>
+          <option value="risky">Risky</option>
+        </select>
+      </div>
     </div>
     <div class="modal-field"><label>In Reply.io</label>
       <select id="modal-reply"><option value="0">No</option><option value="1">Yes</option></select>
@@ -177,11 +183,10 @@
 
 <!-- Enrich Modal -->
 <div class="modal-overlay" id="enrich-modal">
-  <div class="modal enrich-modal">
+  <div class="modal" style="width:420px">
     <h3>⚡ Enrich Profiles</h3>
-    <p>This visits each broker's individual IBBA profile page to scrape their email, phone, firm, and website. Takes ~0.8s per profile so be patient — start with a small batch.</p>
-    <div class="modal-field">
-      <label>How many profiles to enrich?</label>
+    <p class="enrich-modal">Visits each broker's IBBA profile to scrape phone, email, firm, website, and bio. ~0.8s per profile — start small.</p>
+    <div class="modal-field"><label>How many profiles?</label>
       <select id="enrich-limit">
         <option value="50">50 profiles (~1 min)</option>
         <option value="100" selected>100 profiles (~2 min)</option>
@@ -192,24 +197,19 @@
     </div>
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="closeEnrichModal()">Cancel</button>
-      <button class="btn btn-enrich" onclick="confirmEnrich()">Start Enrichment</button>
+      <button class="btn btn-enrich" onclick="confirmEnrich()">Start</button>
     </div>
   </div>
 </div>
 
 <script>
-let currentPage = 1;
-let editingId = null;
-let scrapeInterval = null;
-let enrichInterval = null;
+var currentPage=1, editingId=null, scrapeInterval=null, enrichInterval=null, searchTimer=null;
 
-let searchTimer;
-document.getElementById("search-input").addEventListener("input",()=>{clearTimeout(searchTimer);searchTimer=setTimeout(()=>loadBrokers(1),300)});
-document.getElementById("state-filter").addEventListener("change",()=>loadBrokers(1));
-document.getElementById("city-filter").addEventListener("input",()=>{clearTimeout(searchTimer);searchTimer=setTimeout(()=>loadBrokers(1),300)});
+document.getElementById("search-input").addEventListener("input",function(){clearTimeout(searchTimer);searchTimer=setTimeout(function(){loadBrokers(1)},300)});
+document.getElementById("state-filter").addEventListener("change",function(){loadBrokers(1)});
 
 async function loadStats(){
-  const d=await(await fetch("/api/stats")).json();
+  var d=await(await fetch("/api/stats")).json();
   document.getElementById("stat-total").textContent=d.total.toLocaleString();
   document.getElementById("stat-email").textContent=d.with_email.toLocaleString();
   document.getElementById("stat-enriched").textContent=d.enriched.toLocaleString();
@@ -217,81 +217,102 @@ async function loadStats(){
 }
 
 async function loadStates(){
-  const states=await(await fetch("/api/states")).json();
-  const sel=document.getElementById("state-filter");
-  // Clear existing options except first
+  var states=await(await fetch("/api/states")).json();
+  var sel=document.getElementById("state-filter");
   while(sel.options.length>1) sel.remove(1);
-  states.forEach(s=>{const o=document.createElement("option");o.value=s;o.textContent=s;sel.appendChild(o)});
+  states.forEach(function(s){var o=document.createElement("option");o.value=s;o.textContent=s;sel.appendChild(o)});
 }
 
-async function loadBrokers(page=1){
-  currentPage=page;
-  const search=document.getElementById("search-input").value;
-  const state=document.getElementById("state-filter").value;
-  const city=document.getElementById("city-filter").value;
-  const emailOnly=document.getElementById("email-only").checked;
-  const params=new URLSearchParams({search,state,city,email_only:emailOnly,page});
-  const d=await(await fetch(`/api/brokers?${params}`)).json();
-  window._brokerMap={};d.brokers.forEach(b=>window._brokerMap[b.id]=b);
-  const tbody=document.getElementById("broker-table");
-  const empty=document.getElementById("empty-state");
-  if(!d.brokers.length){tbody.innerHTML="";empty.style.display="block";}
-  else{
-    empty.style.display="none";
-    tbody.innerHTML=d.brokers.map(function(b){
-      var emailCell = b.email ? '<a href="mailto:'+esc(b.email)+'">'+esc(b.email)+'</a>' : '<span style="color:var(--muted)">—</span>';
-      var phoneCell = b.phone ? '<a href="tel:'+esc(b.phone)+'" style="color:var(--text);text-decoration:none">'+esc(b.phone)+'</a>' : '<span style="color:var(--muted)">—</span>';
-      var webCell = b.website ? '<a href="'+esc(b.website)+'" target="_blank">↗</a>' : '<span style="color:var(--muted)">—</span>';
-      var ibbaCell = b.profile_url ? '<a href="'+esc(b.profile_url)+'" target="_blank" style="color:var(--accent2);text-decoration:none;font-size:11px">↗ ibba</a>' : '<span style="color:var(--muted)">—</span>';
-      var bouncerCell = '<span class="tag tag-'+(b.bouncer_status||'unchecked')+'">'+(b.bouncer_status||'—')+'</span>';
-      var replyCell = b.in_reply ? '<span class="tag tag-in-reply">Yes</span>' : '<span style="color:var(--muted)">—</span>';
-      var editBtn = '<button class="btn btn-secondary" style="padding:3px 9px;font-size:10px" onclick="openEdit('+b.id+')">Edit</button>';
-      return '<tr>'
-        +'<td class="name" title="'+esc(b.name)+'">'+esc(b.name)+'</td>'
-        +'<td>'+(esc(b.firm)||'<span style="color:var(--muted)">—</span>')+'</td>'
-        +'<td>'+esc(b.city)+'</td>'
-        +'<td>'+esc(b.state)+'</td>'
-        +'<td class="email">'+emailCell+'</td>'
-        +'<td>'+phoneCell+'</td>'
-        +'<td class="website">'+webCell+'</td>'
-        +'<td>'+ibbaCell+'</td>'
-        +'<td>'+bouncerCell+'</td>'
-        +'<td>'+replyCell+'</td>'
-        +'<td>'+editBtn+'</td>'
-        +'</tr>';
-    }).join('');
-  }
+async function loadBrokers(page){
+  page=page||1; currentPage=page;
+  var search=document.getElementById("search-input").value;
+  var state=document.getElementById("state-filter").value;
+  var emailOnly=document.getElementById("email-only").checked;
+  var params=new URLSearchParams({search:search,state:state,email_only:emailOnly,page:page});
+  var d=await(await fetch("/api/brokers?"+params)).json();
+  var tbody=document.getElementById("broker-table");
+  var empty=document.getElementById("empty-state");
+
+  window._brokerMap={};
+  d.brokers.forEach(function(b){window._brokerMap[b.id]=b});
+
+  if(!d.brokers.length){tbody.innerHTML="";empty.style.display="block";return;}
+  empty.style.display="none";
+
+  var rows="";
+  d.brokers.forEach(function(b){
+    var hasBio=b.bio&&b.bio.length>0;
+    var expandIcon=hasBio?'<span class="expand-icon" id="ei-'+b.id+'">▶</span>':'';
+    var emailCell=b.email?'<a href="mailto:'+esc(b.email)+'">'+esc(b.email)+'</a>':'<span style="color:var(--muted)">—</span>';
+    var phoneCell=b.phone?'<a href="tel:'+esc(b.phone)+'" style="color:var(--text);text-decoration:none">'+esc(b.phone)+'</a>':'<span style="color:var(--muted)">—</span>';
+    var webCell=b.website?'<a href="'+esc(b.website)+'" target="_blank" style="color:var(--accent2)">↗</a>':'<span style="color:var(--muted)">—</span>';
+    var ibbaCell=b.profile_url?'<a href="'+esc(b.profile_url)+'" target="_blank" style="color:var(--accent2);font-size:11px">↗</a>':'<span style="color:var(--muted)">—</span>';
+    var bouncer='<span class="tag tag-'+(b.bouncer_status||"unchecked")+'">'+(b.bouncer_status||"—")+'</span>';
+    var reply=b.in_reply?'<span class="tag tag-in-reply">Yes</span>':'<span style="color:var(--muted)">—</span>';
+    var editBtn='<button class="btn btn-secondary" style="padding:3px 9px;font-size:10px" onclick="event.stopPropagation();openEdit('+b.id+')">Edit</button>';
+    var rowClick=hasBio?'onclick="toggleBio('+b.id+')"':'';
+
+    rows+='<tr class="data-row" '+rowClick+'>'
+      +'<td style="padding:9px 6px 9px 14px">'+expandIcon+'</td>'
+      +'<td class="name-cell" title="'+esc(b.name)+'">'+esc(b.name)+'</td>'
+      +'<td title="'+esc(b.firm)+'">'+(esc(b.firm)||'<span style="color:var(--muted)">—</span>')+'</td>'
+      +'<td>'+esc(b.state)+'</td>'
+      +'<td class="email-cell">'+emailCell+'</td>'
+      +'<td>'+phoneCell+'</td>'
+      +'<td>'+webCell+'</td>'
+      +'<td>'+ibbaCell+'</td>'
+      +'<td>'+bouncer+'</td>'
+      +'<td>'+reply+'</td>'
+      +'<td>'+editBtn+'</td>'
+      +'</tr>';
+
+    // Bio expansion row — always present, hidden until toggled
+    rows+='<tr class="bio-row" id="bio-row-'+b.id+'">'
+      +'<td colspan="11"><div class="bio-inner" id="bio-'+b.id+'">'+esc(b.bio||"")+'</div></td>'
+      +'</tr>';
+  });
+  tbody.innerHTML=rows;
   renderPagination(d.page,d.pages,d.total);
 }
 
+function toggleBio(id){
+  var inner=document.getElementById("bio-"+id);
+  var icon=document.getElementById("ei-"+id);
+  if(!inner) return;
+  var isOpen=inner.classList.contains("open");
+  inner.classList.toggle("open",!isOpen);
+  if(icon) icon.classList.toggle("open",!isOpen);
+}
+
 function renderPagination(page,pages,total){
-  const el=document.getElementById("pagination");
+  var el=document.getElementById("pagination");
   if(pages<=1){el.innerHTML="";return;}
-  const start=(page-1)*50+1, end=Math.min(page*50,total);
-  const pageNums=[];
-  for(let p=Math.max(1,page-3);p<=Math.min(pages,page+3);p++) pageNums.push(p);
-  el.innerHTML=`
-    <span class="page-info">Showing ${start}–${end} of ${total.toLocaleString()}</span>
-    <div class="page-btns">
-      <button class="page-btn" onclick="loadBrokers(${page-1})" ${page===1?"disabled":""}>←</button>
-      ${pageNums.map(p=>`<button class="page-btn ${p===page?'active':''}" onclick="loadBrokers(${p})">${p}</button>`).join("")}
-      <button class="page-btn" onclick="loadBrokers(${page+1})" ${page===pages?"disabled":""}>→</button>
-    </div>`;
+  var start=(page-1)*50+1, end=Math.min(page*50,total);
+  var nums="";
+  for(var p=Math.max(1,page-3);p<=Math.min(pages,page+3);p++){
+    nums+='<button class="page-btn'+(p===page?" active":"")+'" onclick="loadBrokers('+p+')">'+p+'</button>';
+  }
+  el.innerHTML='<span class="page-info">Showing '+start+'–'+end+' of '+total.toLocaleString()+'</span>'
+    +'<div class="page-btns">'
+    +'<button class="page-btn" onclick="loadBrokers('+(page-1)+')" '+(page===1?"disabled":"")+'>←</button>'
+    +nums
+    +'<button class="page-btn" onclick="loadBrokers('+(page+1)+')" '+(page===pages?"disabled":"")+'>→</button>'
+    +'</div>';
 }
 
 async function startScrape(){
-  const btn=document.getElementById("scrape-btn");
+  var btn=document.getElementById("scrape-btn");
   btn.disabled=true; btn.textContent="Running…";
   document.getElementById("scrape-bar").classList.remove("hidden");
   await fetch("/api/scrape",{method:"POST"});
-  scrapeInterval=setInterval(async()=>{
-    const d=await(await fetch("/api/scrape/status")).json();
-    document.getElementById("scrape-msg").textContent=`${d.message}`;
+  scrapeInterval=setInterval(async function(){
+    var d=await(await fetch("/api/scrape/status")).json();
+    document.getElementById("scrape-msg").textContent=d.message;
     if(!d.running){
       clearInterval(scrapeInterval);
       btn.disabled=false; btn.textContent="▶ Scrape IBBA";
       loadBrokers(1); loadStats(); loadStates();
-      setTimeout(()=>document.getElementById("scrape-bar").classList.add("hidden"),6000);
+      setTimeout(function(){document.getElementById("scrape-bar").classList.add("hidden")},6000);
     }
   },2000);
 }
@@ -300,56 +321,60 @@ function openEnrichModal(){document.getElementById("enrich-modal").classList.add
 function closeEnrichModal(){document.getElementById("enrich-modal").classList.remove("open")}
 
 async function confirmEnrich(){
-  const limit=document.getElementById("enrich-limit").value;
+  var limit=document.getElementById("enrich-limit").value;
   closeEnrichModal();
   document.getElementById("enrich-bar").classList.remove("hidden");
   await fetch("/api/enrich",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({limit:parseInt(limit)})});
-  enrichInterval=setInterval(async()=>{
-    const d=await(await fetch("/api/enrich/status")).json();
+  enrichInterval=setInterval(async function(){
+    var d=await(await fetch("/api/enrich/status")).json();
     document.getElementById("enrich-msg").textContent=d.message;
-    if(d.total>0) document.getElementById("enrich-progress").style.width=`${Math.round(d.done/d.total*100)}%`;
+    if(d.total>0) document.getElementById("enrich-progress").style.width=Math.round(d.done/d.total*100)+"%";
     if(!d.running){
       clearInterval(enrichInterval);
-      loadBrokers(currentPage); loadStats(); loadStates();
-      setTimeout(()=>{document.getElementById("enrich-bar").classList.add("hidden");document.getElementById("enrich-progress").style.width="0%"},6000);
+      loadBrokers(currentPage); loadStats();
+      setTimeout(function(){
+        document.getElementById("enrich-bar").classList.add("hidden");
+        document.getElementById("enrich-progress").style.width="0%";
+      },6000);
     }
   },2000);
 }
 
 function exportCSV(){
-  const state=document.getElementById("state-filter").value;
-  const emailOnly=document.getElementById("email-only").checked;
-  window.location.href=`/api/export?state=${state}&email_only=${emailOnly}`;
+  var state=document.getElementById("state-filter").value;
+  var emailOnly=document.getElementById("email-only").checked;
+  window.location.href="/api/export?state="+state+"&email_only="+emailOnly;
 }
 
 function openEdit(id){
   var b=window._brokerMap[id];
   if(!b) return;
   editingId=b.id;
-  document.getElementById('modal-title').textContent=b.name||'Edit Broker';
-  document.getElementById('modal-name').value=b.name||'';
-  document.getElementById('modal-city').value=b.city||'';
-  document.getElementById('modal-state').value=b.state||'';
-  document.getElementById('modal-email').value=b.email||'';
-  document.getElementById('modal-phone').value=b.phone||'';
-  document.getElementById('modal-firm').value=b.firm||'';
-  document.getElementById('modal-bouncer').value=b.bouncer_status||'unchecked';
-  document.getElementById('modal-reply').value=b.in_reply?'1':'0';
-  document.getElementById('modal-notes').value=b.notes||'';
-  document.getElementById('edit-modal').classList.add('open');
+  document.getElementById("modal-title").textContent=b.name||"Edit Broker";
+  document.getElementById("modal-name").value=b.name||"";
+  document.getElementById("modal-firm").value=b.firm||"";
+  document.getElementById("modal-email").value=b.email||"";
+  document.getElementById("modal-phone").value=b.phone||"";
+  document.getElementById("modal-state").value=b.state||"";
+  document.getElementById("modal-bouncer").value=b.bouncer_status||"unchecked";
+  document.getElementById("modal-reply").value=b.in_reply?"1":"0";
+  document.getElementById("modal-notes").value=b.notes||"";
+  document.getElementById("edit-modal").classList.add("open");
 }
-
 
 function closeModal(){document.getElementById("edit-modal").classList.remove("open");editingId=null}
 
 async function saveEdit(){
   if(!editingId) return;
-  await fetch(`/api/brokers/${editingId}`,{
-    method:"PATCH",headers:{"Content-Type":"application/json"},
+  await fetch("/api/brokers/"+editingId,{
+    method:"PATCH",
+    headers:{"Content-Type":"application/json"},
     body:JSON.stringify({
+      name:document.getElementById("modal-name").value,
+      firm:document.getElementById("modal-firm").value,
       email:document.getElementById("modal-email").value,
       phone:document.getElementById("modal-phone").value,
-      firm:document.getElementById("modal-firm").value,
+      state:document.getElementById("modal-state").value,
       bouncer_status:document.getElementById("modal-bouncer").value,
       in_reply:parseInt(document.getElementById("modal-reply").value),
       notes:document.getElementById("modal-notes").value
@@ -358,7 +383,7 @@ async function saveEdit(){
   closeModal(); loadBrokers(currentPage);
 }
 
-function esc(s){if(!s)return"";return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;")}
+function esc(s){if(!s)return"";return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;")}
 
 loadStats(); loadStates(); loadBrokers(1);
 </script>
