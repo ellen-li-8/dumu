@@ -8,10 +8,9 @@ import threading
 import csv
 import io
 import traceback
+import re
 
 app = Flask(__name__)
-
-# Use /tmp on Railway since the app directory may be read-only
 DB_PATH = "/tmp/brokers.db"
 
 scrape_status = {
@@ -22,18 +21,27 @@ scrape_status = {
     "last_error": ""
 }
 
+enrich_status = {
+    "running": False,
+    "total": 0,
+    "done": 0,
+    "message": "Idle"
+}
+
 STATES = [
-    "alabama", "alaska", "arizona", "arkansas", "california", "colorado",
-    "connecticut", "delaware", "florida", "georgia", "hawaii", "idaho",
-    "illinois", "indiana", "iowa", "kansas", "kentucky", "louisiana",
-    "maine", "maryland", "massachusetts", "michigan", "minnesota",
-    "mississippi", "missouri", "montana", "nebraska", "nevada",
-    "new-hampshire", "new-jersey", "new-mexico", "new-york",
-    "north-carolina", "north-dakota", "ohio", "oklahoma", "oregon",
-    "pennsylvania", "rhode-island", "south-carolina", "south-dakota",
-    "tennessee", "texas", "utah", "vermont", "virginia", "washington",
-    "west-virginia", "wisconsin", "wyoming"
+    "alabama","alaska","arizona","arkansas","california","colorado",
+    "connecticut","delaware","florida","georgia","hawaii","idaho",
+    "illinois","indiana","iowa","kansas","kentucky","louisiana",
+    "maine","maryland","massachusetts","michigan","minnesota",
+    "mississippi","missouri","montana","nebraska","nevada",
+    "new-hampshire","new-jersey","new-mexico","new-york",
+    "north-carolina","north-dakota","ohio","oklahoma","oregon",
+    "pennsylvania","rhode-island","south-carolina","south-dakota",
+    "tennessee","texas","utah","vermont","virginia","washington",
+    "west-virginia","wisconsin","wyoming"
 ]
+
+SKIP_FIRMS = {"cbi","mcbi","m&ami","m","more details »","view profile",""}
 
 def get_db():
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
@@ -56,23 +64,87 @@ def init_db():
             bouncer_status TEXT DEFAULT 'unchecked',
             in_reply INTEGER DEFAULT 0,
             notes TEXT,
+            enriched INTEGER DEFAULT 0,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP
         )
     """)
+    # Add enriched column if upgrading from old schema
+    try:
+        conn.execute("ALTER TABLE brokers ADD COLUMN enriched INTEGER DEFAULT 0")
+    except:
+        pass
     conn.commit()
     conn.close()
 
+def decode_cloudflare_email(encoded):
+    """Decode Cloudflare email obfuscation"""
+    try:
+        enc = bytes.fromhex(encoded)
+        key = enc[0]
+        return ''.join(chr(b ^ key) for b in enc[1:])
+    except:
+        return ""
+
+def scrape_profile(profile_url, headers):
+    """Scrape a single broker profile page for email, firm, website, phone"""
+    result = {"email": "", "firm": "", "website": "", "phone": ""}
+    try:
+        resp = requests.get(profile_url, headers=headers, timeout=15)
+        if resp.status_code != 200:
+            return result
+        soup = BeautifulSoup(resp.text, "html.parser")
+
+        # Phone
+        phone_link = soup.find("a", href=lambda x: x and x.startswith("tel:"))
+        if phone_link:
+            result["phone"] = phone_link.get_text(strip=True)
+
+        # Email — Cloudflare encoded
+        for el in soup.select("a[href*='email-protection']"):
+            encoded = el.get("href", "").split("#")[-1]
+            decoded = decode_cloudflare_email(encoded)
+            if "@" in decoded:
+                result["email"] = decoded
+                break
+        # Also check data-cfemail attributes
+        if not result["email"]:
+            for el in soup.select("[data-cfemail]"):
+                decoded = decode_cloudflare_email(el.get("data-cfemail", ""))
+                if "@" in decoded:
+                    result["email"] = decoded
+                    break
+
+        # Firm — apartment icon sibling
+        firm_el = soup.select_one("span.dashicons-admin-multisite, i.fa-building")
+        if not firm_el:
+            # Try finding the firm text near "apartment" icon pattern
+            for el in soup.find_all(string=True):
+                parent = el.parent
+                if parent and parent.name not in ["script","style","a"] and len(el.strip()) > 2:
+                    prev = parent.find_previous_sibling()
+                    if prev and "apartment" in str(prev):
+                        result["firm"] = el.strip()
+                        break
+
+        # Website
+        visit_link = soup.find("a", string=lambda s: s and "visit website" in s.lower())
+        if visit_link:
+            result["website"] = visit_link.get("href", "")
+
+        # Fallback firm from website domain
+        if not result["firm"] and result["website"]:
+            domain = re.sub(r'https?://(www\.)?', '', result["website"]).split('/')[0].split('.')[0]
+            result["firm"] = domain.replace("-", " ").replace("_", " ").title()
+
+    except Exception as e:
+        pass
+    return result
+
 def scrape_ibba():
     global scrape_status
-    scrape_status["running"] = True
-    scrape_status["message"] = "Starting scrape..."
-    scrape_status["scraped"] = 0
-    scrape_status["last_error"] = ""
+    scrape_status.update({"running": True, "message": "Starting...", "scraped": 0, "last_error": ""})
 
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    }
-
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     inserted = 0
 
@@ -87,7 +159,7 @@ def scrape_ibba():
                 if resp.status_code != 200:
                     continue
             except Exception as e:
-                scrape_status["last_error"] = f"Request error on {state_name}: {str(e)}"
+                scrape_status["last_error"] = str(e)
                 continue
 
             soup = BeautifulSoup(resp.text, "html.parser")
@@ -96,7 +168,6 @@ def scrape_ibba():
             for link_el in broker_links:
                 name = link_el.get_text(strip=True)
                 profile_url = link_el.get("href", "")
-
                 h4 = link_el.parent
                 firm = ""
                 city = ""
@@ -104,29 +175,29 @@ def scrape_ibba():
 
                 sibling = h4.find_next_sibling()
                 texts = []
-                while sibling and sibling.name not in ["h4", "h3", "h2", "hr"]:
+                while sibling and sibling.name not in ["h4","h3","h2","hr"]:
                     t = sibling.get_text(strip=True)
                     if t:
                         texts.append(t)
-                    phone_link = sibling.find("a", href=lambda x: x and x.startswith("tel:"))
-                    if phone_link and not phone:
-                        phone = phone_link.get_text(strip=True)
+                    pl = sibling.find("a", href=lambda x: x and x.startswith("tel:"))
+                    if pl and not phone:
+                        phone = pl.get_text(strip=True)
                     sibling = sibling.find_next_sibling()
 
                 for t in texts:
                     if "," in t and state_name.lower() in t.lower():
                         city = t.split(",")[0].strip()
-                    elif t and not firm and t != name and "more details" not in t.lower():
+                    elif t and not firm and t != name and t.lower().strip() not in SKIP_FIRMS and "more details" not in t.lower():
                         firm = t
 
                 try:
                     conn.execute(
-                        "INSERT INTO brokers (name, firm, city, state, email, phone, website, profile_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                        "INSERT INTO brokers (name,firm,city,state,email,phone,website,profile_url) VALUES (?,?,?,?,?,?,?,?)",
                         (name, firm, city, state_name, "", phone, "", profile_url)
                     )
                     inserted += 1
                 except Exception as e:
-                    scrape_status["last_error"] = f"Insert error: {str(e)}"
+                    scrape_status["last_error"] = str(e)
 
             conn.commit()
             scrape_status["scraped"] = inserted
@@ -134,7 +205,6 @@ def scrape_ibba():
 
     except Exception as e:
         scrape_status["last_error"] = traceback.format_exc()
-        scrape_status["message"] = f"Fatal error: {str(e)}"
     finally:
         try:
             conn.commit()
@@ -142,9 +212,36 @@ def scrape_ibba():
         except:
             pass
 
-    scrape_status["running"] = False
-    scrape_status["total"] = inserted
-    scrape_status["message"] = f"Done! Saved {inserted} brokers."
+    scrape_status.update({"running": False, "total": inserted, "message": f"Done! Saved {inserted} brokers. Now run Enrich Profiles to get emails."})
+
+def enrich_profiles_worker(limit):
+    global enrich_status
+    enrich_status.update({"running": True, "done": 0, "message": "Starting enrichment..."})
+
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+
+    rows = conn.execute(
+        "SELECT id, profile_url FROM brokers WHERE enriched=0 AND profile_url != '' LIMIT ?", (limit,)
+    ).fetchall()
+
+    enrich_status["total"] = len(rows)
+
+    for i, row in enumerate(rows):
+        enrich_status["message"] = f"Enriching profile {i+1}/{len(rows)}..."
+        data = scrape_profile(row["profile_url"], headers)
+        conn.execute(
+            "UPDATE brokers SET email=?, phone=COALESCE(NULLIF(phone,''),?), website=?, firm=COALESCE(NULLIF(firm,''),?), enriched=1 WHERE id=?",
+            (data["email"], data["phone"], data["website"], data["firm"], row["id"])
+        )
+        conn.commit()
+        enrich_status["done"] = i + 1
+        time.sleep(0.8)  # polite delay
+
+    conn.close()
+    enrich_status.update({"running": False, "message": f"Done! Enriched {len(rows)} profiles."})
+
+# ── Routes ──────────────────────────────────────────────
 
 @app.route("/")
 def index():
@@ -152,127 +249,128 @@ def index():
 
 @app.route("/api/brokers")
 def get_brokers():
-    search = request.args.get("search", "").strip()
-    state = request.args.get("state", "").strip()
-    city = request.args.get("city", "").strip()
-    email_only = request.args.get("email_only", "false") == "true"
-    page = int(request.args.get("page", 1))
+    search = request.args.get("search","").strip()
+    state  = request.args.get("state","").strip()
+    city   = request.args.get("city","").strip()
+    email_only = request.args.get("email_only","false") == "true"
+    page   = int(request.args.get("page",1))
     per_page = 50
 
     try:
         conn = get_db()
-        query = "SELECT * FROM brokers WHERE 1=1"
-        params = []
-
+        q = "SELECT * FROM brokers WHERE 1=1"
+        p = []
         if search:
-            query += " AND (name LIKE ? OR firm LIKE ? OR email LIKE ?)"
-            params += [f"%{search}%", f"%{search}%", f"%{search}%"]
+            q += " AND (name LIKE ? OR firm LIKE ? OR email LIKE ? OR phone LIKE ?)"
+            p += [f"%{search}%"]*4
         if state:
-            query += " AND state = ?"
-            params.append(state)
+            q += " AND state = ?"
+            p.append(state)
         if city:
-            query += " AND city LIKE ?"
-            params.append(f"%{city}%")
+            q += " AND city LIKE ?"
+            p.append(f"%{city}%")
         if email_only:
-            query += " AND email != '' AND email IS NOT NULL"
+            q += " AND email != '' AND email IS NOT NULL"
 
-        total = conn.execute(query.replace("SELECT *", "SELECT COUNT(*)"), params).fetchone()[0]
-        query += f" ORDER BY state, name LIMIT {per_page} OFFSET {(page-1)*per_page}"
-        rows = conn.execute(query, params).fetchall()
+        total = conn.execute(q.replace("SELECT *","SELECT COUNT(*)"), p).fetchone()[0]
+        q += f" ORDER BY state, name LIMIT {per_page} OFFSET {(page-1)*per_page}"
+        rows = conn.execute(q, p).fetchall()
         conn.close()
-        return jsonify({"brokers": [dict(r) for r in rows], "total": total, "page": page, "pages": max(1, (total + per_page - 1) // per_page)})
+        return jsonify({"brokers":[dict(r) for r in rows],"total":total,"page":page,"pages":max(1,(total+per_page-1)//per_page)})
     except Exception as e:
-        return jsonify({"brokers": [], "total": 0, "page": 1, "pages": 1, "error": str(e)})
+        return jsonify({"brokers":[],"total":0,"page":1,"pages":1,"error":str(e)})
 
 @app.route("/api/states")
 def get_states():
     try:
         conn = get_db()
-        rows = conn.execute("SELECT DISTINCT state FROM brokers WHERE state != '' AND state IS NOT NULL ORDER BY state").fetchall()
+        rows = conn.execute("SELECT DISTINCT state FROM brokers WHERE state != '' ORDER BY state").fetchall()
         conn.close()
         return jsonify([r["state"] for r in rows])
-    except Exception as e:
+    except:
         return jsonify([])
-
-@app.route("/api/scrape", methods=["POST"])
-def start_scrape():
-    if scrape_status["running"]:
-        return jsonify({"error": "Scrape already running"}), 400
-    # Re-init DB each scrape to be safe
-    init_db()
-    t = threading.Thread(target=scrape_ibba)
-    t.daemon = True
-    t.start()
-    return jsonify({"message": "Scrape started"})
-
-@app.route("/api/scrape/status")
-def get_scrape_status():
-    return jsonify(scrape_status)
-
-@app.route("/api/debug")
-def debug():
-    """Quick diagnostic endpoint"""
-    try:
-        conn = get_db()
-        count = conn.execute("SELECT COUNT(*) FROM brokers").fetchone()[0]
-        sample = conn.execute("SELECT name, state FROM brokers LIMIT 3").fetchall()
-        conn.close()
-        return jsonify({
-            "db_path": DB_PATH,
-            "db_exists": os.path.exists(DB_PATH),
-            "broker_count": count,
-            "sample": [dict(r) for r in sample],
-            "last_error": scrape_status.get("last_error", "")
-        })
-    except Exception as e:
-        return jsonify({"error": str(e), "db_path": DB_PATH, "db_exists": os.path.exists(DB_PATH)})
-
-@app.route("/api/brokers/<int:broker_id>", methods=["PATCH"])
-def update_broker(broker_id):
-    data = request.json
-    allowed = ["notes", "bouncer_status", "in_reply"]
-    conn = get_db()
-    for field in allowed:
-        if field in data:
-            conn.execute(f"UPDATE brokers SET {field}=? WHERE id=?", (data[field], broker_id))
-    conn.commit()
-    conn.close()
-    return jsonify({"ok": True})
-
-@app.route("/api/export")
-def export_csv():
-    state = request.args.get("state", "")
-    conn = get_db()
-    query = "SELECT name, firm, city, state, email, phone, profile_url FROM brokers WHERE 1=1"
-    params = []
-    if state:
-        query += " AND state = ?"
-        params.append(state)
-    rows = conn.execute(query, params).fetchall()
-    conn.close()
-
-    output = io.StringIO()
-    writer = csv.writer(output)
-    writer.writerow(["Name", "Firm", "City", "State", "Email", "Phone", "Profile URL"])
-    for r in rows:
-        writer.writerow([r["name"], r["firm"], r["city"], r["state"], r["email"], r["phone"], r["profile_url"]])
-
-    return Response(output.getvalue(), mimetype="text/csv",
-                    headers={"Content-Disposition": "attachment;filename=ibba_brokers.csv"})
 
 @app.route("/api/stats")
 def stats():
     try:
         conn = get_db()
-        total = conn.execute("SELECT COUNT(*) FROM brokers").fetchone()[0]
-        with_email = conn.execute("SELECT COUNT(*) FROM brokers WHERE email != ''").fetchone()[0]
-        states = conn.execute("SELECT COUNT(DISTINCT state) FROM brokers").fetchone()[0]
+        total     = conn.execute("SELECT COUNT(*) FROM brokers").fetchone()[0]
+        with_email= conn.execute("SELECT COUNT(*) FROM brokers WHERE email != ''").fetchone()[0]
+        states    = conn.execute("SELECT COUNT(DISTINCT state) FROM brokers").fetchone()[0]
+        enriched  = conn.execute("SELECT COUNT(*) FROM brokers WHERE enriched=1").fetchone()[0]
         conn.close()
-        return jsonify({"total": total, "with_email": with_email, "states": states})
+        return jsonify({"total":total,"with_email":with_email,"states":states,"enriched":enriched})
     except:
-        return jsonify({"total": 0, "with_email": 0, "states": 0})
+        return jsonify({"total":0,"with_email":0,"states":0,"enriched":0})
+
+@app.route("/api/scrape", methods=["POST"])
+def start_scrape():
+    if scrape_status["running"]:
+        return jsonify({"error":"Scrape already running"}),400
+    init_db()
+    threading.Thread(target=scrape_ibba, daemon=True).start()
+    return jsonify({"message":"Scrape started"})
+
+@app.route("/api/scrape/status")
+def get_scrape_status():
+    return jsonify(scrape_status)
+
+@app.route("/api/enrich", methods=["POST"])
+def start_enrich():
+    if enrich_status["running"]:
+        return jsonify({"error":"Enrichment already running"}),400
+    limit = int(request.json.get("limit", 100))
+    threading.Thread(target=enrich_profiles_worker, args=(limit,), daemon=True).start()
+    return jsonify({"message":f"Enrichment started for up to {limit} profiles"})
+
+@app.route("/api/enrich/status")
+def get_enrich_status():
+    return jsonify(enrich_status)
+
+@app.route("/api/brokers/<int:broker_id>", methods=["PATCH"])
+def update_broker(broker_id):
+    data = request.json
+    conn = get_db()
+    for field in ["notes","bouncer_status","in_reply","email","phone","firm"]:
+        if field in data:
+            conn.execute(f"UPDATE brokers SET {field}=? WHERE id=?", (data[field], broker_id))
+    conn.commit()
+    conn.close()
+    return jsonify({"ok":True})
+
+@app.route("/api/export")
+def export_csv():
+    state = request.args.get("state","")
+    email_only = request.args.get("email_only","false") == "true"
+    conn = get_db()
+    q = "SELECT name,firm,city,state,email,phone,website,profile_url FROM brokers WHERE 1=1"
+    p = []
+    if state:
+        q += " AND state=?"; p.append(state)
+    if email_only:
+        q += " AND email != ''"
+    rows = conn.execute(q,p).fetchall()
+    conn.close()
+    out = io.StringIO()
+    w = csv.writer(out)
+    w.writerow(["Name","Firm","City","State","Email","Phone","Website","Profile URL"])
+    for r in rows:
+        w.writerow([r["name"],r["firm"],r["city"],r["state"],r["email"],r["phone"],r["website"],r["profile_url"]])
+    return Response(out.getvalue(), mimetype="text/csv",
+                    headers={"Content-Disposition":"attachment;filename=ibba_brokers.csv"})
+
+@app.route("/api/debug")
+def debug():
+    try:
+        conn = get_db()
+        count = conn.execute("SELECT COUNT(*) FROM brokers").fetchone()[0]
+        sample = conn.execute("SELECT name,state,email,firm FROM brokers WHERE email != '' LIMIT 3").fetchall()
+        conn.close()
+        return jsonify({"db_path":DB_PATH,"db_exists":os.path.exists(DB_PATH),"broker_count":count,"sample":[dict(r) for r in sample],"last_error":scrape_status.get("last_error","")})
+    except Exception as e:
+        return jsonify({"error":str(e)})
 
 if __name__ == "__main__":
     init_db()
-    port = int(os.environ.get("PORT", 5000))
+    port = int(os.environ.get("PORT",5000))
     app.run(host="0.0.0.0", port=port, debug=False)
