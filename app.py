@@ -336,7 +336,7 @@ def get_enrich_status():
 def update_broker(broker_id):
     data = request.json
     conn = get_db()
-    for field in ["notes","bouncer_status","in_reply","email","phone","firm"]:
+    for field in ["name","city","state","firm","email","phone","notes","bouncer_status","in_reply"]:
         if field in data:
             conn.execute(f"UPDATE brokers SET {field}=? WHERE id=?", (data[field], broker_id))
     conn.commit()
