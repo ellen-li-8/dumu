@@ -126,7 +126,7 @@
       <thead>
         <tr>
           <th style="width:24px"></th>
-          <th>Name</th>
+          <th style="min-width:180px">Name</th>
           <th>Firm</th>
           <th>State</th>
           <th>Email</th>
@@ -253,6 +253,14 @@ async function loadBrokers(page){
   d.brokers.forEach(function(b){
     var hasBio=b.bio&&b.bio.length>0;
     var expandIcon=hasBio?'<span class="expand-icon" id="ei-'+b.id+'">▶</span>':'';
+    var specTags='';
+    if(b.specialties){
+      b.specialties.split(',').slice(0,3).forEach(function(s){
+        s=s.trim();
+        if(s) specTags+='<span style="display:inline-block;padding:1px 6px;border-radius:3px;font-size:9px;background:rgba(200,240,96,.1);color:var(--accent);border:1px solid rgba(200,240,96,.2);margin:1px 2px 1px 0;white-space:nowrap">'+esc(s)+'</span>';
+      });
+      if(b.specialties.split(',').length>3) specTags+='<span style="font-size:9px;color:var(--muted)">+'+( b.specialties.split(',').length-3)+' more</span>';
+    }
     var emailCell=b.email?'<a href="mailto:'+esc(b.email)+'">'+esc(b.email)+'</a>':'<span style="color:var(--muted)">—</span>';
     var phoneCell=b.phone?'<a href="tel:'+esc(b.phone)+'" style="color:var(--text);text-decoration:none">'+esc(b.phone)+'</a>':'<span style="color:var(--muted)">—</span>';
     var webCell=b.website?'<a href="'+esc(b.website)+'" target="_blank" style="color:var(--accent2)">↗</a>':'<span style="color:var(--muted)">—</span>';
@@ -264,7 +272,7 @@ async function loadBrokers(page){
 
     rows+='<tr class="data-row" '+rowClick+'>'
       +'<td style="padding:9px 6px 9px 14px">'+expandIcon+'</td>'
-      +'<td class="name-cell" title="'+esc(b.name)+'">'+esc(b.name)+'</td>'
+      +'<td class="name-cell" title="'+esc(b.name)+'" style="max-width:200px;white-space:normal">'+esc(b.name)+(specTags?'<br><span style=\"line-height:1.8\">'+specTags+'</span>':'')+'</td>'
       +'<td title="'+esc(b.firm)+'">'+(esc(b.firm)||'<span style="color:var(--muted)">—</span>')+'</td>'
       +'<td>'+esc(b.state)+'</td>'
       +'<td class="email-cell">'+emailCell+'</td>'
@@ -322,7 +330,24 @@ async function startScrape(){
       clearInterval(scrapeInterval);
       btn.disabled=false; btn.textContent="▶ Scrape IBBA";
       loadBrokers(1); loadStats(); loadStates();
-      setTimeout(function(){document.getElementById("scrape-bar").classList.add("hidden")},6000);
+      setTimeout(function(){document.getElementById("scrape-bar").classList.add("hidden")},3000);
+      // Auto-enrich all profiles after scrape
+      document.getElementById("scrape-msg").textContent="Scrape done! Starting profile enrichment...";
+      await fetch("/api/enrich",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({limit:9999})});
+      document.getElementById("enrich-bar").classList.remove("hidden");
+      enrichInterval=setInterval(async function(){
+        var e=await(await fetch("/api/enrich/status")).json();
+        document.getElementById("enrich-msg").textContent=e.message;
+        if(e.total>0) document.getElementById("enrich-progress").style.width=Math.round(e.done/e.total*100)+"%";
+        if(!e.running){
+          clearInterval(enrichInterval);
+          loadBrokers(1); loadStats(); loadSpecialties();
+          setTimeout(function(){
+            document.getElementById("enrich-bar").classList.add("hidden");
+            document.getElementById("enrich-progress").style.width="0%";
+          },6000);
+        }
+      },2000);
     }
   },2000);
 }
