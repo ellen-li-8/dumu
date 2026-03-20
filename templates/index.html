@@ -232,25 +232,34 @@ async function loadBrokers(page=1){
   const emailOnly=document.getElementById("email-only").checked;
   const params=new URLSearchParams({search,state,city,email_only:emailOnly,page});
   const d=await(await fetch(`/api/brokers?${params}`)).json();
+  window._brokerMap={};d.brokers.forEach(b=>window._brokerMap[b.id]=b);
   const tbody=document.getElementById("broker-table");
   const empty=document.getElementById("empty-state");
   if(!d.brokers.length){tbody.innerHTML="";empty.style.display="block";}
   else{
     empty.style.display="none";
-    tbody.innerHTML=d.brokers.map(b=>`
-      <tr>
-        <td class="name" title="${esc(b.name)}">${esc(b.name)}</td>
-        <td title="${esc(b.firm)}">${esc(b.firm)||'<span style="color:var(--muted)">—</span>'}</td>
-        <td>${esc(b.city)}</td>
-        <td>${esc(b.state)}</td>
-        <td class="email">${b.email?`<a href="mailto:${esc(b.email)}">${esc(b.email)}</a>`:'<span style="color:var(--muted)">—</span>'}</td>
-        <td>${b.phone?`<a href="tel:${esc(b.phone)}" style="color:var(--text);text-decoration:none">${esc(b.phone)}</a>`:'<span style="color:var(--muted)">—</span>'}</td>
-        <td class="website">${b.website?`<a href="${esc(b.website)}" target="_blank">↗</a>`:'<span style="color:var(--muted)">—</span>'}</td>
-        <td>${b.profile_url?"<a href='"+b.profile_url+"' target='_blank' style='color:var(--accent2);text-decoration:none;font-size:11px'>↗ ibba</a>":'<span style="color:var(--muted)">—</span>'}</td>
-        <td><span class="tag tag-${b.bouncer_status||'unchecked'}">${b.bouncer_status||'—'}</span></td>
-        <td>${b.in_reply?'<span class="tag tag-in-reply">Yes</span>':'<span style="color:var(--muted)">—</span>'}</td>
-        <td><button class="btn btn-secondary" style="padding:3px 9px;font-size:10px" onclick='openEdit(${JSON.stringify(b)})'>Edit</button></td>
-      </tr>`).join("");
+    tbody.innerHTML=d.brokers.map(function(b){
+      var emailCell = b.email ? '<a href="mailto:'+esc(b.email)+'">'+esc(b.email)+'</a>' : '<span style="color:var(--muted)">—</span>';
+      var phoneCell = b.phone ? '<a href="tel:'+esc(b.phone)+'" style="color:var(--text);text-decoration:none">'+esc(b.phone)+'</a>' : '<span style="color:var(--muted)">—</span>';
+      var webCell = b.website ? '<a href="'+esc(b.website)+'" target="_blank">↗</a>' : '<span style="color:var(--muted)">—</span>';
+      var ibbaCell = b.profile_url ? '<a href="'+esc(b.profile_url)+'" target="_blank" style="color:var(--accent2);text-decoration:none;font-size:11px">↗ ibba</a>' : '<span style="color:var(--muted)">—</span>';
+      var bouncerCell = '<span class="tag tag-'+(b.bouncer_status||'unchecked')+'">'+(b.bouncer_status||'—')+'</span>';
+      var replyCell = b.in_reply ? '<span class="tag tag-in-reply">Yes</span>' : '<span style="color:var(--muted)">—</span>';
+      var editBtn = '<button class="btn btn-secondary" style="padding:3px 9px;font-size:10px" onclick="openEdit('+b.id+')">Edit</button>';
+      return '<tr>'
+        +'<td class="name" title="'+esc(b.name)+'">'+esc(b.name)+'</td>'
+        +'<td>'+(esc(b.firm)||'<span style="color:var(--muted)">—</span>')+'</td>'
+        +'<td>'+esc(b.city)+'</td>'
+        +'<td>'+esc(b.state)+'</td>'
+        +'<td class="email">'+emailCell+'</td>'
+        +'<td>'+phoneCell+'</td>'
+        +'<td class="website">'+webCell+'</td>'
+        +'<td>'+ibbaCell+'</td>'
+        +'<td>'+bouncerCell+'</td>'
+        +'<td>'+replyCell+'</td>'
+        +'<td>'+editBtn+'</td>'
+        +'</tr>';
+    }).join('');
   }
   renderPagination(d.page,d.pages,d.total);
 }
@@ -313,17 +322,23 @@ function exportCSV(){
   window.location.href=`/api/export?state=${state}&email_only=${emailOnly}`;
 }
 
-function openEdit(b){
+function openEdit(id){
+  var b=window._brokerMap[id];
+  if(!b) return;
   editingId=b.id;
-  document.getElementById("modal-title").textContent=b.name||"Edit Broker";
-  document.getElementById("modal-email").value=b.email||"";
-  document.getElementById("modal-phone").value=b.phone||"";
-  document.getElementById("modal-firm").value=b.firm||"";
-  document.getElementById("modal-bouncer").value=b.bouncer_status||"unchecked";
-  document.getElementById("modal-reply").value=b.in_reply?"1":"0";
-  document.getElementById("modal-notes").value=b.notes||"";
-  document.getElementById("edit-modal").classList.add("open");
+  document.getElementById('modal-title').textContent=b.name||'Edit Broker';
+  document.getElementById('modal-name').value=b.name||'';
+  document.getElementById('modal-city').value=b.city||'';
+  document.getElementById('modal-state').value=b.state||'';
+  document.getElementById('modal-email').value=b.email||'';
+  document.getElementById('modal-phone').value=b.phone||'';
+  document.getElementById('modal-firm').value=b.firm||'';
+  document.getElementById('modal-bouncer').value=b.bouncer_status||'unchecked';
+  document.getElementById('modal-reply').value=b.in_reply?'1':'0';
+  document.getElementById('modal-notes').value=b.notes||'';
+  document.getElementById('edit-modal').classList.add('open');
 }
+
 
 function closeModal(){document.getElementById("edit-modal").classList.remove("open");editingId=null}
 
