@@ -7,15 +7,19 @@ import time
 import threading
 import csv
 import io
+import traceback
 
 app = Flask(__name__)
-DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "brokers.db")
+
+# Use /tmp on Railway since the app directory may be read-only
+DB_PATH = "/tmp/brokers.db"
 
 scrape_status = {
     "running": False,
     "total": 0,
     "scraped": 0,
-    "message": "Idle"
+    "message": "Idle",
+    "last_error": ""
 }
 
 STATES = [
@@ -37,7 +41,7 @@ def get_db():
     return conn
 
 def init_db():
-    conn = get_db()
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     conn.execute("""
         CREATE TABLE IF NOT EXISTS brokers (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -48,9 +52,9 @@ def init_db():
             email TEXT,
             phone TEXT,
             website TEXT,
-            profile_url TEXT UNIQUE,
+            profile_url TEXT,
             bouncer_status TEXT DEFAULT 'unchecked',
-            in_reply BOOLEAN DEFAULT 0,
+            in_reply INTEGER DEFAULT 0,
             notes TEXT,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP
         )
@@ -63,26 +67,27 @@ def scrape_ibba():
     scrape_status["running"] = True
     scrape_status["message"] = "Starting scrape..."
     scrape_status["scraped"] = 0
+    scrape_status["last_error"] = ""
 
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
 
-    # Open one persistent connection for the whole scrape
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     inserted = 0
 
     try:
         for state_slug in STATES:
             state_name = state_slug.replace("-", " ").title()
-            scrape_status["message"] = f"Scraping {state_name}... ({inserted} saved so far)"
+            scrape_status["message"] = f"Scraping {state_name}... ({inserted} saved)"
 
             url = f"https://www.ibba.org/state/{state_slug}/"
             try:
-                resp = requests.get(url, headers=headers, timeout=15)
+                resp = requests.get(url, headers=headers, timeout=20)
                 if resp.status_code != 200:
                     continue
             except Exception as e:
+                scrape_status["last_error"] = f"Request error on {state_name}: {str(e)}"
                 continue
 
             soup = BeautifulSoup(resp.text, "html.parser")
@@ -110,33 +115,36 @@ def scrape_ibba():
 
                 for t in texts:
                     if "," in t and state_name.lower() in t.lower():
-                        parts = t.split(",")
-                        city = parts[0].strip()
-                    elif t and not firm and t != name and "more details" not in t.lower() and not t.startswith("tel:"):
+                        city = t.split(",")[0].strip()
+                    elif t and not firm and t != name and "more details" not in t.lower():
                         firm = t
 
                 try:
-                    conn.execute("""
-                        INSERT OR IGNORE INTO brokers (name, firm, city, state, email, phone, website, profile_url)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                    """, (name, firm, city, state_name, "", phone, "", profile_url))
+                    conn.execute(
+                        "INSERT INTO brokers (name, firm, city, state, email, phone, website, profile_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                        (name, firm, city, state_name, "", phone, "", profile_url)
+                    )
                     inserted += 1
-                except Exception:
-                    pass
+                except Exception as e:
+                    scrape_status["last_error"] = f"Insert error: {str(e)}"
 
             conn.commit()
             scrape_status["scraped"] = inserted
             time.sleep(1)
 
     except Exception as e:
-        scrape_status["message"] = f"Error: {str(e)}"
+        scrape_status["last_error"] = traceback.format_exc()
+        scrape_status["message"] = f"Fatal error: {str(e)}"
     finally:
-        conn.commit()
-        conn.close()
+        try:
+            conn.commit()
+            conn.close()
+        except:
+            pass
 
     scrape_status["running"] = False
     scrape_status["total"] = inserted
-    scrape_status["message"] = f"Done! Saved {inserted} brokers across all 50 states."
+    scrape_status["message"] = f"Done! Saved {inserted} brokers."
 
 @app.route("/")
 def index():
@@ -151,54 +159,73 @@ def get_brokers():
     page = int(request.args.get("page", 1))
     per_page = 50
 
-    conn = get_db()
-    query = "SELECT * FROM brokers WHERE 1=1"
-    params = []
+    try:
+        conn = get_db()
+        query = "SELECT * FROM brokers WHERE 1=1"
+        params = []
 
-    if search:
-        query += " AND (name LIKE ? OR firm LIKE ? OR email LIKE ?)"
-        params += [f"%{search}%", f"%{search}%", f"%{search}%"]
-    if state:
-        query += " AND state LIKE ?"
-        params.append(f"%{state}%")
-    if city:
-        query += " AND city LIKE ?"
-        params.append(f"%{city}%")
-    if email_only:
-        query += " AND email != '' AND email IS NOT NULL"
+        if search:
+            query += " AND (name LIKE ? OR firm LIKE ? OR email LIKE ?)"
+            params += [f"%{search}%", f"%{search}%", f"%{search}%"]
+        if state:
+            query += " AND state = ?"
+            params.append(state)
+        if city:
+            query += " AND city LIKE ?"
+            params.append(f"%{city}%")
+        if email_only:
+            query += " AND email != '' AND email IS NOT NULL"
 
-    count_query = query.replace("SELECT *", "SELECT COUNT(*)")
-    total = conn.execute(count_query, params).fetchone()[0]
-    query += f" ORDER BY state, name LIMIT {per_page} OFFSET {(page-1)*per_page}"
-    rows = conn.execute(query, params).fetchall()
-    conn.close()
-
-    return jsonify({
-        "brokers": [dict(r) for r in rows],
-        "total": total,
-        "page": page,
-        "pages": (total + per_page - 1) // per_page
-    })
+        total = conn.execute(query.replace("SELECT *", "SELECT COUNT(*)"), params).fetchone()[0]
+        query += f" ORDER BY state, name LIMIT {per_page} OFFSET {(page-1)*per_page}"
+        rows = conn.execute(query, params).fetchall()
+        conn.close()
+        return jsonify({"brokers": [dict(r) for r in rows], "total": total, "page": page, "pages": max(1, (total + per_page - 1) // per_page)})
+    except Exception as e:
+        return jsonify({"brokers": [], "total": 0, "page": 1, "pages": 1, "error": str(e)})
 
 @app.route("/api/states")
 def get_states():
-    conn = get_db()
-    rows = conn.execute("SELECT DISTINCT state FROM brokers WHERE state != '' ORDER BY state").fetchall()
-    conn.close()
-    return jsonify([r["state"] for r in rows])
+    try:
+        conn = get_db()
+        rows = conn.execute("SELECT DISTINCT state FROM brokers WHERE state != '' AND state IS NOT NULL ORDER BY state").fetchall()
+        conn.close()
+        return jsonify([r["state"] for r in rows])
+    except Exception as e:
+        return jsonify([])
 
 @app.route("/api/scrape", methods=["POST"])
 def start_scrape():
     if scrape_status["running"]:
         return jsonify({"error": "Scrape already running"}), 400
+    # Re-init DB each scrape to be safe
+    init_db()
     t = threading.Thread(target=scrape_ibba)
     t.daemon = True
     t.start()
     return jsonify({"message": "Scrape started"})
 
 @app.route("/api/scrape/status")
-def scrape_status_route():
+def get_scrape_status():
     return jsonify(scrape_status)
+
+@app.route("/api/debug")
+def debug():
+    """Quick diagnostic endpoint"""
+    try:
+        conn = get_db()
+        count = conn.execute("SELECT COUNT(*) FROM brokers").fetchone()[0]
+        sample = conn.execute("SELECT name, state FROM brokers LIMIT 3").fetchall()
+        conn.close()
+        return jsonify({
+            "db_path": DB_PATH,
+            "db_exists": os.path.exists(DB_PATH),
+            "broker_count": count,
+            "sample": [dict(r) for r in sample],
+            "last_error": scrape_status.get("last_error", "")
+        })
+    except Exception as e:
+        return jsonify({"error": str(e), "db_path": DB_PATH, "db_exists": os.path.exists(DB_PATH)})
 
 @app.route("/api/brokers/<int:broker_id>", methods=["PATCH"])
 def update_broker(broker_id):
@@ -215,16 +242,12 @@ def update_broker(broker_id):
 @app.route("/api/export")
 def export_csv():
     state = request.args.get("state", "")
-    email_only = request.args.get("email_only", "false") == "true"
-
     conn = get_db()
     query = "SELECT name, firm, city, state, email, phone, profile_url FROM brokers WHERE 1=1"
     params = []
     if state:
-        query += " AND state LIKE ?"
-        params.append(f"%{state}%")
-    if email_only:
-        query += " AND email != '' AND email IS NOT NULL"
+        query += " AND state = ?"
+        params.append(state)
     rows = conn.execute(query, params).fetchall()
     conn.close()
 
@@ -234,20 +257,20 @@ def export_csv():
     for r in rows:
         writer.writerow([r["name"], r["firm"], r["city"], r["state"], r["email"], r["phone"], r["profile_url"]])
 
-    return Response(
-        output.getvalue(),
-        mimetype="text/csv",
-        headers={"Content-Disposition": "attachment;filename=ibba_brokers.csv"}
-    )
+    return Response(output.getvalue(), mimetype="text/csv",
+                    headers={"Content-Disposition": "attachment;filename=ibba_brokers.csv"})
 
 @app.route("/api/stats")
 def stats():
-    conn = get_db()
-    total = conn.execute("SELECT COUNT(*) FROM brokers").fetchone()[0]
-    with_email = conn.execute("SELECT COUNT(*) FROM brokers WHERE email != '' AND email IS NOT NULL").fetchone()[0]
-    states = conn.execute("SELECT COUNT(DISTINCT state) FROM brokers WHERE state != ''").fetchone()[0]
-    conn.close()
-    return jsonify({"total": total, "with_email": with_email, "states": states})
+    try:
+        conn = get_db()
+        total = conn.execute("SELECT COUNT(*) FROM brokers").fetchone()[0]
+        with_email = conn.execute("SELECT COUNT(*) FROM brokers WHERE email != ''").fetchone()[0]
+        states = conn.execute("SELECT COUNT(DISTINCT state) FROM brokers").fetchone()[0]
+        conn.close()
+        return jsonify({"total": total, "with_email": with_email, "states": states})
+    except:
+        return jsonify({"total": 0, "with_email": 0, "states": 0})
 
 if __name__ == "__main__":
     init_db()
