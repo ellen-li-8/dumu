@@ -132,6 +132,7 @@
           <th>Email</th>
           <th>Phone</th>
           <th>Website</th>
+          <th>IBBA Profile</th>
           <th>Email Status</th>
           <th>In Reply</th>
           <th></th>
@@ -151,9 +152,10 @@
 <div class="modal-overlay" id="edit-modal">
   <div class="modal">
     <h3 id="modal-title">Edit Broker</h3>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><div class="modal-field"><label>First / Full Name</label><input type="text" id="modal-name" placeholder="Name"/></div><div class="modal-field"><label>Firm</label><input type="text" id="modal-firm" placeholder="Firm name"/></div></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><div class="modal-field"><label>City</label><input type="text" id="modal-city" placeholder="City"/></div><div class="modal-field"><label>State</label><input type="text" id="modal-state" placeholder="State"/></div></div>
     <div class="modal-field"><label>Email</label><input type="text" id="modal-email" placeholder="email@domain.com"/></div>
     <div class="modal-field"><label>Phone</label><input type="text" id="modal-phone" placeholder="Phone number"/></div>
-    <div class="modal-field"><label>Firm</label><input type="text" id="modal-firm" placeholder="Firm name"/></div>
     <div class="modal-field"><label>Email Status (Bouncer)</label>
       <select id="modal-bouncer">
         <option value="unchecked">Unchecked</option>
@@ -244,6 +246,7 @@ async function loadBrokers(page=1){
         <td class="email">${b.email?`<a href="mailto:${esc(b.email)}">${esc(b.email)}</a>`:'<span style="color:var(--muted)">—</span>'}</td>
         <td>${b.phone?`<a href="tel:${esc(b.phone)}" style="color:var(--text);text-decoration:none">${esc(b.phone)}</a>`:'<span style="color:var(--muted)">—</span>'}</td>
         <td class="website">${b.website?`<a href="${esc(b.website)}" target="_blank">↗</a>`:'<span style="color:var(--muted)">—</span>'}</td>
+        <td>${b.profile_url?"<a href='"+b.profile_url+"' target='_blank' style='color:var(--accent2);text-decoration:none;font-size:11px'>↗ ibba</a>":'<span style="color:var(--muted)">—</span>'}</td>
         <td><span class="tag tag-${b.bouncer_status||'unchecked'}">${b.bouncer_status||'—'}</span></td>
         <td>${b.in_reply?'<span class="tag tag-in-reply">Yes</span>':'<span style="color:var(--muted)">—</span>'}</td>
         <td><button class="btn btn-secondary" style="padding:3px 9px;font-size:10px" onclick='openEdit(${JSON.stringify(b)})'>Edit</button></td>
