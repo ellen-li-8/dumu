@@ -96,6 +96,7 @@ def init_db():
             in_reply INTEGER DEFAULT 0,
             notes TEXT,
             bio TEXT DEFAULT '',
+            specialties TEXT DEFAULT '',
             enriched INTEGER DEFAULT 0,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP
         )
@@ -107,6 +108,10 @@ def init_db():
         pass
     try:
         conn.execute("ALTER TABLE brokers ADD COLUMN bio TEXT DEFAULT ''")
+    except:
+        pass
+    try:
+        conn.execute("ALTER TABLE brokers ADD COLUMN specialties TEXT DEFAULT ''")
     except:
         pass
     conn.commit()
@@ -123,7 +128,7 @@ def decode_cloudflare_email(encoded):
 
 def scrape_profile(profile_url, headers):
     """Scrape a single broker profile page for email, firm, website, phone, bio"""
-    result = {"email": "", "firm": "", "website": "", "phone": "", "bio": ""}
+    result = {"email": "", "firm": "", "website": "", "phone": "", "bio": "", "specialties": ""}
     try:
         resp = requests.get(profile_url, headers=headers, timeout=15)
         if resp.status_code != 200:
@@ -186,6 +191,19 @@ def scrape_profile(profile_url, headers):
                 if len(text) > len(best):
                     best = text
         result["bio"] = best[:800]
+
+        # Specialties — listed as <li> items under a "Specialty Areas" heading
+        specialties = []
+        spec_heading = None
+        for heading in soup.find_all(["h4","h5","h3","strong"]):
+            if "specialty" in heading.get_text(strip=True).lower():
+                spec_heading = heading
+                break
+        if spec_heading:
+            ul = spec_heading.find_next("ul")
+            if ul:
+                specialties = [li.get_text(strip=True) for li in ul.find_all("li") if li.get_text(strip=True)]
+        result["specialties"] = ", ".join(specialties)
 
     except Exception:
         pass
@@ -283,7 +301,7 @@ def enrich_profiles_worker(limit):
             enrich_status["done"] = i
             try:
                 data = scrape_profile(row["profile_url"], headers)
-                conn.execute("UPDATE brokers SET email=?, phone=COALESCE(NULLIF(phone,''),?), website=?, firm=COALESCE(NULLIF(firm,''),?), bio=?, enriched=1 WHERE id=?", (data["email"], data["phone"], data["website"], data["firm"], data.get("bio",""), row["id"]))
+                conn.execute("UPDATE brokers SET email=?, phone=COALESCE(NULLIF(phone,''),?), website=?, firm=COALESCE(NULLIF(firm,''),?), bio=?, specialties=?, enriched=1 WHERE id=?", (data["email"], data["phone"], data["website"], data["firm"], data.get("bio",""), data.get("specialties",""), row["id"]))
                 conn.commit()
             except Exception:
                 pass
@@ -310,6 +328,7 @@ def get_brokers():
     state  = request.args.get("state","").strip()
     city   = request.args.get("city","").strip()
     email_only = request.args.get("email_only","false") == "true"
+    specialty  = request.args.get("specialty","").strip()
     page   = int(request.args.get("page",1))
     per_page = 50
 
@@ -328,6 +347,9 @@ def get_brokers():
             p.append(f"%{city}%")
         if email_only:
             q += " AND email != '' AND email IS NOT NULL"
+        if specialty:
+            q += " AND specialties LIKE ?"
+            p.append(f"%{specialty}%")
 
         total = conn.execute(q.replace("SELECT *","SELECT COUNT(*)"), p).fetchone()[0]
         q += f" ORDER BY state, name LIMIT {per_page} OFFSET {(page-1)*per_page}"
@@ -345,6 +367,24 @@ def get_states():
         conn.close()
         return jsonify([r["state"] for r in rows])
     except:
+        return jsonify([])
+
+@app.route("/api/specialties")
+def get_specialties():
+    try:
+        conn = get_db()
+        rows = conn.execute("SELECT specialties FROM brokers WHERE specialties != '' AND specialties IS NOT NULL").fetchall()
+        conn.close()
+        counts = {}
+        for row in rows:
+            for s in row["specialties"].split(","):
+                s = s.strip()
+                if s:
+                    counts[s] = counts.get(s, 0) + 1
+        # Sort by frequency
+        sorted_specs = sorted(counts.keys(), key=lambda x: -counts[x])
+        return jsonify(sorted_specs)
+    except Exception as e:
         return jsonify([])
 
 @app.route("/api/stats")
@@ -388,7 +428,7 @@ def get_enrich_status():
 def update_broker(broker_id):
     data = request.json
     conn = get_db()
-    for field in ["name","state","firm","email","phone","bio","notes","bouncer_status","in_reply"]:
+    for field in ["name","state","firm","email","phone","bio","specialties","notes","bouncer_status","in_reply"]:
         if field in data:
             conn.execute(f"UPDATE brokers SET {field}=? WHERE id=?", (data[field], broker_id))
     conn.commit()
