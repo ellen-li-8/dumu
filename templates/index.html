@@ -103,6 +103,7 @@
 <div class="toolbar">
   <input type="text" class="search-input" placeholder="Search name, firm, email…" id="search-input"/>
   <select id="state-filter"><option value="">All States</option></select>
+  <select id="specialty-filter"><option value="">All Specialties</option></select>
   <button class="btn btn-primary" id="scrape-btn" onclick="startScrape()">▶ Scrape IBBA</button>
   <button class="btn btn-enrich" id="enrich-btn" onclick="openEnrichModal()">⚡ Enrich Profiles</button>
   <button class="btn btn-secondary" onclick="exportCSV()">↓ CSV</button>
@@ -207,6 +208,7 @@ var currentPage=1, editingId=null, scrapeInterval=null, enrichInterval=null, sea
 
 document.getElementById("search-input").addEventListener("input",function(){clearTimeout(searchTimer);searchTimer=setTimeout(function(){loadBrokers(1)},300)});
 document.getElementById("state-filter").addEventListener("change",function(){loadBrokers(1)});
+document.getElementById("specialty-filter").addEventListener("change",function(){loadBrokers(1)});
 
 async function loadStats(){
   var d=await(await fetch("/api/stats")).json();
@@ -223,12 +225,20 @@ async function loadStates(){
   states.forEach(function(s){var o=document.createElement("option");o.value=s;o.textContent=s;sel.appendChild(o)});
 }
 
+async function loadSpecialties(){
+  var specs=await(await fetch("/api/specialties")).json();
+  var sel=document.getElementById("specialty-filter");
+  while(sel.options.length>1) sel.remove(1);
+  specs.forEach(function(s){var o=document.createElement("option");o.value=s;o.textContent=s;sel.appendChild(o)});
+}
+
 async function loadBrokers(page){
   page=page||1; currentPage=page;
   var search=document.getElementById("search-input").value;
   var state=document.getElementById("state-filter").value;
   var emailOnly=document.getElementById("email-only").checked;
-  var params=new URLSearchParams({search:search,state:state,email_only:emailOnly,page:page});
+  var specialty=document.getElementById("specialty-filter").value;
+  var params=new URLSearchParams({search:search,state:state,specialty:specialty,email_only:emailOnly,page:page});
   var d=await(await fetch("/api/brokers?"+params)).json();
   var tbody=document.getElementById("broker-table");
   var empty=document.getElementById("empty-state");
@@ -331,7 +341,7 @@ async function confirmEnrich(){
     if(d.total>0) document.getElementById("enrich-progress").style.width=Math.round(d.done/d.total*100)+"%";
     if(!d.running){
       clearInterval(enrichInterval);
-      loadBrokers(currentPage); loadStats();
+      loadBrokers(currentPage); loadStats(); loadSpecialties();
       setTimeout(function(){
         document.getElementById("enrich-bar").classList.add("hidden");
         document.getElementById("enrich-progress").style.width="0%";
@@ -385,7 +395,7 @@ async function saveEdit(){
 
 function esc(s){if(!s)return"";return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;")}
 
-loadStats(); loadStates(); loadBrokers(1);
+loadStats(); loadStates(); loadSpecialties(); loadBrokers(1);
 </script>
 </body>
 </html>
