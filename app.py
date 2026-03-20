@@ -5,7 +5,6 @@ import requests
 from bs4 import BeautifulSoup
 import time
 import threading
-import json
 from datetime import datetime
 
 app = Flask(__name__)
@@ -17,6 +16,19 @@ scrape_status = {
     "scraped": 0,
     "message": "Idle"
 }
+
+STATES = [
+    "alabama", "alaska", "arizona", "arkansas", "california", "colorado",
+    "connecticut", "delaware", "florida", "georgia", "hawaii", "idaho",
+    "illinois", "indiana", "iowa", "kansas", "kentucky", "louisiana",
+    "maine", "maryland", "massachusetts", "michigan", "minnesota",
+    "mississippi", "missouri", "montana", "nebraska", "nevada",
+    "new-hampshire", "new-jersey", "new-mexico", "new-york",
+    "north-carolina", "north-dakota", "ohio", "oklahoma", "oregon",
+    "pennsylvania", "rhode-island", "south-carolina", "south-dakota",
+    "tennessee", "texas", "utah", "vermont", "virginia", "washington",
+    "west-virginia", "wisconsin", "wyoming"
+]
 
 def get_db():
     conn = sqlite3.connect(DB_PATH)
@@ -55,91 +67,67 @@ def scrape_ibba():
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
 
-    base_url = "https://www.ibba.org/find-a-business-broker/"
-    page = 1
     all_brokers = []
 
     try:
-        while True:
-            scrape_status["message"] = f"Scraping page {page}..."
-            url = f"{base_url}?pg={page}" if page > 1 else base_url
+        for state_slug in STATES:
+            state_name = state_slug.replace("-", " ").title()
+            scrape_status["message"] = f"Scraping {state_name}... ({len(all_brokers)} found so far)"
 
-            resp = requests.get(url, headers=headers, timeout=15)
-            if resp.status_code != 200:
-                scrape_status["message"] = f"Got status {resp.status_code} on page {page}, stopping."
-                break
+            url = f"https://www.ibba.org/state/{state_slug}/"
+            try:
+                resp = requests.get(url, headers=headers, timeout=15)
+                if resp.status_code != 200:
+                    continue
+            except Exception:
+                continue
 
             soup = BeautifulSoup(resp.text, "html.parser")
 
-            # Find broker listings — IBBA uses varying markup, try common patterns
-            broker_cards = soup.select(".member-directory-result, .broker-card, article.broker, .directory-item, .member-result")
-            if not broker_cards:
-                # Fallback: look for any repeated card-like structure
-                broker_cards = soup.select(".wpbdp-listing, .listing-item")
+            # Each broker is an h4 containing a link to their profile
+            broker_links = soup.select("h4 a[href*='/broker-profile/']")
 
-            if not broker_cards:
-                scrape_status["message"] = f"No more broker cards found on page {page}. Done."
-                break
+            for link_el in broker_links:
+                name = link_el.get_text(strip=True)
+                profile_url = link_el.get("href", "")
 
-            for card in broker_cards:
-                name = ""
+                h4 = link_el.parent
                 firm = ""
                 city = ""
-                state = ""
-                email = ""
                 phone = ""
-                website = ""
-                profile_url = ""
 
-                name_el = card.select_one("h2, h3, .name, .broker-name, .listing-title")
-                if name_el:
-                    name = name_el.get_text(strip=True)
+                # Walk siblings after h4 to find firm, city, phone
+                sibling = h4.find_next_sibling()
+                texts = []
+                while sibling and sibling.name not in ["h4", "h3", "h2", "hr"]:
+                    t = sibling.get_text(strip=True)
+                    if t:
+                        texts.append(t)
+                    phone_link = sibling.find("a", href=lambda x: x and x.startswith("tel:"))
+                    if phone_link and not phone:
+                        phone = phone_link.get_text(strip=True)
+                    sibling = sibling.find_next_sibling()
 
-                link_el = card.select_one("a[href*='broker'], a[href*='member'], h2 a, h3 a")
-                if link_el:
-                    profile_url = link_el.get("href", "")
-
-                for el in card.select("p, li, span, div"):
-                    text = el.get_text(strip=True)
-                    if "@" in text and not email:
-                        email = text.strip()
-                    if any(x in text.lower() for x in ["phone", "tel", "call"]) and not phone:
-                        phone = text.replace("Phone:", "").replace("Tel:", "").strip()
-
-                # Try to extract city/state from address or location fields
-                location_el = card.select_one(".location, .city, .address, [class*='location'], [class*='city']")
-                if location_el:
-                    loc_text = location_el.get_text(strip=True)
-                    parts = loc_text.split(",")
-                    if len(parts) >= 2:
+                for t in texts:
+                    if "," in t and state_name.lower() in t.lower():
+                        parts = t.split(",")
                         city = parts[0].strip()
-                        state = parts[1].strip().split()[0] if parts[1].strip() else ""
+                    elif t and not firm and t != name and "more details" not in t.lower() and not t.startswith("tel:"):
+                        firm = t
 
-                firm_el = card.select_one(".company, .firm, .organization, [class*='company'], [class*='firm']")
-                if firm_el:
-                    firm = firm_el.get_text(strip=True)
-
-                if name or email:
-                    all_brokers.append({
-                        "name": name,
-                        "firm": firm,
-                        "city": city,
-                        "state": state,
-                        "email": email,
-                        "phone": phone,
-                        "website": website,
-                        "profile_url": profile_url
-                    })
+                all_brokers.append({
+                    "name": name,
+                    "firm": firm,
+                    "city": city,
+                    "state": state_name,
+                    "email": "",
+                    "phone": phone,
+                    "website": "",
+                    "profile_url": profile_url
+                })
 
             scrape_status["scraped"] = len(all_brokers)
-
-            # Check for next page
-            next_btn = soup.select_one("a.next, a[rel='next'], .pagination .next a")
-            if not next_btn:
-                break
-
-            page += 1
-            time.sleep(1.5)  # polite delay
+            time.sleep(1)
 
     except Exception as e:
         scrape_status["message"] = f"Error: {str(e)}"
@@ -163,7 +151,7 @@ def scrape_ibba():
 
     scrape_status["running"] = False
     scrape_status["total"] = inserted
-    scrape_status["message"] = f"Done! Scraped and saved {inserted} brokers."
+    scrape_status["message"] = f"Done! Scraped and saved {inserted} brokers across all states."
 
 @app.route("/")
 def index():
@@ -250,7 +238,7 @@ def export_csv():
     email_only = request.args.get("email_only", "false") == "true"
 
     conn = get_db()
-    query = "SELECT name, firm, city, state, email, phone FROM brokers WHERE 1=1"
+    query = "SELECT name, firm, city, state, email, phone, profile_url FROM brokers WHERE 1=1"
     params = []
     if state:
         query += " AND state LIKE ?"
@@ -262,9 +250,9 @@ def export_csv():
 
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(["Name", "Firm", "City", "State", "Email", "Phone"])
+    writer.writerow(["Name", "Firm", "City", "State", "Email", "Phone", "Profile URL"])
     for r in rows:
-        writer.writerow([r["name"], r["firm"], r["city"], r["state"], r["email"], r["phone"]])
+        writer.writerow([r["name"], r["firm"], r["city"], r["state"], r["email"], r["phone"], r["profile_url"]])
 
     return Response(
         output.getvalue(),
