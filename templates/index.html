@@ -186,14 +186,14 @@
 <div class="modal-overlay" id="enrich-modal">
   <div class="modal" style="width:420px">
     <h3>⚡ Enrich Profiles</h3>
-    <p class="enrich-modal">Visits each broker's IBBA profile to scrape phone, email, firm, website, and bio. ~0.8s per profile — start small.</p>
+    <p class="enrich-modal">Enriches the top N brokers from your <strong>current filtered view</strong> — pulling phone, email, firm, website, specialties, and bio from their IBBA profile. Only unenriched brokers are included. ~0.8s per profile.</p>
     <div class="modal-field"><label>How many profiles?</label>
       <select id="enrich-limit">
-        <option value="50">50 profiles (~1 min)</option>
-        <option value="100" selected>100 profiles (~2 min)</option>
+        <option value="25">25 profiles (~20 sec)</option>
+        <option value="50" selected>50 profiles (~1 min)</option>
+        <option value="100">100 profiles (~2 min)</option>
         <option value="250">250 profiles (~4 min)</option>
         <option value="500">500 profiles (~7 min)</option>
-        <option value="9999">All remaining</option>
       </select>
     </div>
     <div class="modal-actions">
@@ -330,24 +330,7 @@ async function startScrape(){
       clearInterval(scrapeInterval);
       btn.disabled=false; btn.textContent="▶ Scrape IBBA";
       loadBrokers(1); loadStats(); loadStates();
-      setTimeout(function(){document.getElementById("scrape-bar").classList.add("hidden")},3000);
-      // Auto-enrich all profiles after scrape
-      document.getElementById("scrape-msg").textContent="Scrape done! Starting profile enrichment...";
-      await fetch("/api/enrich",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({limit:9999})});
-      document.getElementById("enrich-bar").classList.remove("hidden");
-      enrichInterval=setInterval(async function(){
-        var e=await(await fetch("/api/enrich/status")).json();
-        document.getElementById("enrich-msg").textContent=e.message;
-        if(e.total>0) document.getElementById("enrich-progress").style.width=Math.round(e.done/e.total*100)+"%";
-        if(!e.running){
-          clearInterval(enrichInterval);
-          loadBrokers(1); loadStats(); loadSpecialties();
-          setTimeout(function(){
-            document.getElementById("enrich-bar").classList.add("hidden");
-            document.getElementById("enrich-progress").style.width="0%";
-          },6000);
-        }
-      },2000);
+      setTimeout(function(){document.getElementById("scrape-bar").classList.add("hidden")},6000);
     }
   },2000);
 }
@@ -357,9 +340,12 @@ function closeEnrichModal(){document.getElementById("enrich-modal").classList.re
 
 async function confirmEnrich(){
   var limit=document.getElementById("enrich-limit").value;
+  var state=document.getElementById("state-filter").value;
+  var specialty=document.getElementById("specialty-filter").value;
+  var search=document.getElementById("search-input").value;
   closeEnrichModal();
   document.getElementById("enrich-bar").classList.remove("hidden");
-  await fetch("/api/enrich",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({limit:parseInt(limit)})});
+  await fetch("/api/enrich",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({limit:parseInt(limit),state:state,specialty:specialty,search:search})});
   enrichInterval=setInterval(async function(){
     var d=await(await fetch("/api/enrich/status")).json();
     document.getElementById("enrich-msg").textContent=d.message;
