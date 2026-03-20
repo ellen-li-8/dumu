@@ -41,7 +41,38 @@ STATES = [
     "west-virginia","wisconsin","wyoming"
 ]
 
-SKIP_FIRMS = {"cbi","mcbi","m&ami","m","more details »","view profile",""}
+SKIP_FIRMS = {"cbi","mcbi","m&ami","mami","cm&ap","m","more details »","view profile",""}
+
+CREDENTIALS = {
+    "cbi","mcbi","m&ami","mami","cm&ap","cmap","cbb","cbb","mba","cpa","cva","cfe","cgma",
+    "dba","jd","esq","lcbb","lcbi","cepa","cvb","phd","ms","bs","ba","ma"
+}
+
+def clean_name_credentials(text):
+    """Remove credential suffixes from names — keep the human name only"""
+    if not text:
+        return text
+    # Split on comma — credentials usually follow a comma
+    parts = text.split(",")
+    name = parts[0].strip()
+    return name
+
+def clean_firm(text):
+    """Remove CBI/MCBI/credential badges that got scraped as firm name"""
+    if not text:
+        return text
+    tokens = re.split(r"\s+", text.strip())
+    cleaned = []
+    for tok in tokens:
+        if tok.lower().strip(".,") not in CREDENTIALS:
+            cleaned.append(tok)
+    result = " ".join(cleaned).strip()
+    # If result is empty or only credential chars, return empty
+    if not result or result.lower() in CREDENTIALS:
+        return ""
+    return result
+
+
 
 def get_db():
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
@@ -64,6 +95,7 @@ def init_db():
             bouncer_status TEXT DEFAULT 'unchecked',
             in_reply INTEGER DEFAULT 0,
             notes TEXT,
+            bio TEXT DEFAULT '',
             enriched INTEGER DEFAULT 0,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP
         )
@@ -71,6 +103,10 @@ def init_db():
     # Add enriched column if upgrading from old schema
     try:
         conn.execute("ALTER TABLE brokers ADD COLUMN enriched INTEGER DEFAULT 0")
+    except:
+        pass
+    try:
+        conn.execute("ALTER TABLE brokers ADD COLUMN bio TEXT DEFAULT ''")
     except:
         pass
     conn.commit()
@@ -86,8 +122,8 @@ def decode_cloudflare_email(encoded):
         return ""
 
 def scrape_profile(profile_url, headers):
-    """Scrape a single broker profile page for email, firm, website, phone"""
-    result = {"email": "", "firm": "", "website": "", "phone": ""}
+    """Scrape a single broker profile page for email, firm, website, phone, bio"""
+    result = {"email": "", "firm": "", "website": "", "phone": "", "bio": ""}
     try:
         resp = requests.get(profile_url, headers=headers, timeout=15)
         if resp.status_code != 200:
@@ -106,7 +142,6 @@ def scrape_profile(profile_url, headers):
             if "@" in decoded:
                 result["email"] = decoded
                 break
-        # Also check data-cfemail attributes
         if not result["email"]:
             for el in soup.select("[data-cfemail]"):
                 decoded = decode_cloudflare_email(el.get("data-cfemail", ""))
@@ -114,29 +149,45 @@ def scrape_profile(profile_url, headers):
                     result["email"] = decoded
                     break
 
-        # Firm — apartment icon sibling
-        firm_el = soup.select_one("span.dashicons-admin-multisite, i.fa-building")
-        if not firm_el:
-            # Try finding the firm text near "apartment" icon pattern
-            for el in soup.find_all(string=True):
-                parent = el.parent
-                if parent and parent.name not in ["script","style","a"] and len(el.strip()) > 2:
-                    prev = parent.find_previous_sibling()
-                    if prev and "apartment" in str(prev):
-                        result["firm"] = el.strip()
-                        break
-
         # Website
         visit_link = soup.find("a", string=lambda s: s and "visit website" in s.lower())
         if visit_link:
             result["website"] = visit_link.get("href", "")
+
+        # Firm — text after apartment material icon
+        for el in soup.find_all(string=True):
+            parent = el.parent
+            if not parent or parent.name in ["script","style","a","title"]:
+                continue
+            text = el.strip()
+            if not text or len(text) < 2:
+                continue
+            prev_sib = parent.find_previous_sibling()
+            if prev_sib and "apartment" in str(prev_sib):
+                cleaned = clean_firm(text)
+                if cleaned:
+                    result["firm"] = cleaned
+                    break
 
         # Fallback firm from website domain
         if not result["firm"] and result["website"]:
             domain = re.sub(r'https?://(www\.)?', '', result["website"]).split('/')[0].split('.')[0]
             result["firm"] = domain.replace("-", " ").replace("_", " ").title()
 
-    except Exception as e:
+        # Bio — longest meaningful paragraph
+        best = ""
+        for p in soup.find_all("p"):
+            text = p.get_text(strip=True)
+            if (len(text) > 80
+                    and "copyright" not in text.lower()
+                    and "newsletter" not in text.lower()
+                    and "captcha" not in text.lower()
+                    and text[:30].lower().count("ibba") == 0):
+                if len(text) > len(best):
+                    best = text
+        result["bio"] = best[:800]
+
+    except Exception:
         pass
     return result
 
@@ -185,15 +236,16 @@ def scrape_ibba():
                     sibling = sibling.find_next_sibling()
 
                 for t in texts:
-                    if "," in t and state_name.lower() in t.lower():
-                        city = t.split(",")[0].strip()
-                    elif t and not firm and t != name and t.lower().strip() not in SKIP_FIRMS and "more details" not in t.lower():
-                        firm = t
+                    # Skip location lines (contain state name) and badge text
+                    if state_name.lower() in t.lower():
+                        continue
+                    if t and not firm and t != name and t.lower().strip() not in SKIP_FIRMS and "more details" not in t.lower():
+                        firm = clean_firm(t)
 
                 try:
                     conn.execute(
                         "INSERT INTO brokers (name,firm,city,state,email,phone,website,profile_url) VALUES (?,?,?,?,?,?,?,?)",
-                        (name, firm, city, state_name, "", phone, "", profile_url)
+                        (name, firm, "", state_name, "", phone, "", profile_url)
                     )
                     inserted += 1
                 except Exception as e:
@@ -231,7 +283,7 @@ def enrich_profiles_worker(limit):
             enrich_status["done"] = i
             try:
                 data = scrape_profile(row["profile_url"], headers)
-                conn.execute("UPDATE brokers SET email=?, phone=COALESCE(NULLIF(phone,''),?), website=?, firm=COALESCE(NULLIF(firm,''),?), enriched=1 WHERE id=?", (data["email"], data["phone"], data["website"], data["firm"], row["id"]))
+                conn.execute("UPDATE brokers SET email=?, phone=COALESCE(NULLIF(phone,''),?), website=?, firm=COALESCE(NULLIF(firm,''),?), bio=?, enriched=1 WHERE id=?", (data["email"], data["phone"], data["website"], data["firm"], data.get("bio",""), row["id"]))
                 conn.commit()
             except Exception:
                 pass
@@ -336,7 +388,7 @@ def get_enrich_status():
 def update_broker(broker_id):
     data = request.json
     conn = get_db()
-    for field in ["name","city","state","firm","email","phone","notes","bouncer_status","in_reply"]:
+    for field in ["name","state","firm","email","phone","bio","notes","bouncer_status","in_reply"]:
         if field in data:
             conn.execute(f"UPDATE brokers SET {field}=? WHERE id=?", (data[field], broker_id))
     conn.commit()
@@ -348,7 +400,7 @@ def export_csv():
     state = request.args.get("state","")
     email_only = request.args.get("email_only","false") == "true"
     conn = get_db()
-    q = "SELECT name,firm,city,state,email,phone,website,profile_url FROM brokers WHERE 1=1"
+    q = "SELECT name,firm,state,email,phone,website,profile_url,bio FROM brokers WHERE 1=1"
     p = []
     if state:
         q += " AND state=?"; p.append(state)
@@ -358,9 +410,9 @@ def export_csv():
     conn.close()
     out = io.StringIO()
     w = csv.writer(out)
-    w.writerow(["Name","Firm","City","State","Email","Phone","Website","Profile URL"])
+    w.writerow(["Name","Firm","State","Email","Phone","Website","Profile URL","Bio"])
     for r in rows:
-        w.writerow([r["name"],r["firm"],r["city"],r["state"],r["email"],r["phone"],r["website"],r["profile_url"]])
+        w.writerow([r["name"],r["firm"],r["state"],r["email"],r["phone"],r["website"],r["profile_url"],r["bio"]])
     return Response(out.getvalue(), mimetype="text/csv",
                     headers={"Content-Disposition":"attachment;filename=ibba_brokers.csv"})
 
