@@ -1,14 +1,15 @@
-from flask import Flask, render_template, jsonify, request
+from flask import Flask, render_template, jsonify, request, Response
 import sqlite3
 import os
 import requests
 from bs4 import BeautifulSoup
 import time
 import threading
-from datetime import datetime
+import csv
+import io
 
 app = Flask(__name__)
-DB_PATH = "brokers.db"
+DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "brokers.db")
 
 scrape_status = {
     "running": False,
@@ -31,7 +32,7 @@ STATES = [
 ]
 
 def get_db():
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -67,24 +68,24 @@ def scrape_ibba():
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
 
-    all_brokers = []
+    # Open one persistent connection for the whole scrape
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    inserted = 0
 
     try:
         for state_slug in STATES:
             state_name = state_slug.replace("-", " ").title()
-            scrape_status["message"] = f"Scraping {state_name}... ({len(all_brokers)} found so far)"
+            scrape_status["message"] = f"Scraping {state_name}... ({inserted} saved so far)"
 
             url = f"https://www.ibba.org/state/{state_slug}/"
             try:
                 resp = requests.get(url, headers=headers, timeout=15)
                 if resp.status_code != 200:
                     continue
-            except Exception:
+            except Exception as e:
                 continue
 
             soup = BeautifulSoup(resp.text, "html.parser")
-
-            # Each broker is an h4 containing a link to their profile
             broker_links = soup.select("h4 a[href*='/broker-profile/']")
 
             for link_el in broker_links:
@@ -96,7 +97,6 @@ def scrape_ibba():
                 city = ""
                 phone = ""
 
-                # Walk siblings after h4 to find firm, city, phone
                 sibling = h4.find_next_sibling()
                 texts = []
                 while sibling and sibling.name not in ["h4", "h3", "h2", "hr"]:
@@ -115,43 +115,28 @@ def scrape_ibba():
                     elif t and not firm and t != name and "more details" not in t.lower() and not t.startswith("tel:"):
                         firm = t
 
-                all_brokers.append({
-                    "name": name,
-                    "firm": firm,
-                    "city": city,
-                    "state": state_name,
-                    "email": "",
-                    "phone": phone,
-                    "website": "",
-                    "profile_url": profile_url
-                })
+                try:
+                    conn.execute("""
+                        INSERT OR IGNORE INTO brokers (name, firm, city, state, email, phone, website, profile_url)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (name, firm, city, state_name, "", phone, "", profile_url))
+                    inserted += 1
+                except Exception:
+                    pass
 
-            scrape_status["scraped"] = len(all_brokers)
+            conn.commit()
+            scrape_status["scraped"] = inserted
             time.sleep(1)
 
     except Exception as e:
         scrape_status["message"] = f"Error: {str(e)}"
-        scrape_status["running"] = False
-        return
-
-    # Save to DB
-    conn = get_db()
-    inserted = 0
-    for b in all_brokers:
-        try:
-            conn.execute("""
-                INSERT OR IGNORE INTO brokers (name, firm, city, state, email, phone, website, profile_url)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """, (b["name"], b["firm"], b["city"], b["state"], b["email"], b["phone"], b["website"], b["profile_url"]))
-            inserted += 1
-        except Exception:
-            pass
-    conn.commit()
-    conn.close()
+    finally:
+        conn.commit()
+        conn.close()
 
     scrape_status["running"] = False
     scrape_status["total"] = inserted
-    scrape_status["message"] = f"Done! Scraped and saved {inserted} brokers across all states."
+    scrape_status["message"] = f"Done! Saved {inserted} brokers across all 50 states."
 
 @app.route("/")
 def index():
@@ -184,7 +169,6 @@ def get_brokers():
 
     count_query = query.replace("SELECT *", "SELECT COUNT(*)")
     total = conn.execute(count_query, params).fetchone()[0]
-
     query += f" ORDER BY state, name LIMIT {per_page} OFFSET {(page-1)*per_page}"
     rows = conn.execute(query, params).fetchall()
     conn.close()
@@ -230,10 +214,6 @@ def update_broker(broker_id):
 
 @app.route("/api/export")
 def export_csv():
-    from flask import Response
-    import csv
-    import io
-
     state = request.args.get("state", "")
     email_only = request.args.get("email_only", "false") == "true"
 
