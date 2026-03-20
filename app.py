@@ -216,30 +216,35 @@ def scrape_ibba():
 
 def enrich_profiles_worker(limit):
     global enrich_status
-    enrich_status.update({"running": True, "done": 0, "message": "Starting enrichment..."})
-
+    enrich_status.update({"running": True, "done": 0, "total": 0, "message": "Starting enrichment..."})
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
-    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
-
-    rows = conn.execute(
-        "SELECT id, profile_url FROM brokers WHERE enriched=0 AND profile_url != '' LIMIT ?", (limit,)
-    ).fetchall()
-
-    enrich_status["total"] = len(rows)
-
-    for i, row in enumerate(rows):
-        enrich_status["message"] = f"Enriching profile {i+1}/{len(rows)}..."
-        data = scrape_profile(row["profile_url"], headers)
-        conn.execute(
-            "UPDATE brokers SET email=?, phone=COALESCE(NULLIF(phone,''),?), website=?, firm=COALESCE(NULLIF(firm,''),?), enriched=1 WHERE id=?",
-            (data["email"], data["phone"], data["website"], data["firm"], row["id"])
-        )
-        conn.commit()
-        enrich_status["done"] = i + 1
-        time.sleep(0.8)  # polite delay
-
-    conn.close()
-    enrich_status.update({"running": False, "message": f"Done! Enriched {len(rows)} profiles."})
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+        rows = list(conn.execute("SELECT id, profile_url FROM brokers WHERE enriched=0 AND profile_url != '' LIMIT ?", (limit,)).fetchall())
+        enrich_status["total"] = len(rows)
+        if not rows:
+            enrich_status.update({"running": False, "message": "No unenriched profiles found."})
+            return
+        for i, row in enumerate(rows):
+            enrich_status["message"] = f"Enriching {i+1} of {len(rows)}..."
+            enrich_status["done"] = i
+            try:
+                data = scrape_profile(row["profile_url"], headers)
+                conn.execute("UPDATE brokers SET email=?, phone=COALESCE(NULLIF(phone,''),?), website=?, firm=COALESCE(NULLIF(firm,''),?), enriched=1 WHERE id=?", (data["email"], data["phone"], data["website"], data["firm"], row["id"]))
+                conn.commit()
+            except Exception:
+                pass
+            enrich_status["done"] = i + 1
+            time.sleep(0.8)
+    except Exception as e:
+        enrich_status["message"] = f"Error: {str(e)}"
+    finally:
+        try:
+            if conn: conn.commit(); conn.close()
+        except: pass
+        enrich_status["running"] = False
+        enrich_status["message"] = f"Done! Enriched {enrich_status['done']} profiles."
 
 # ── Routes ──────────────────────────────────────────────
 
