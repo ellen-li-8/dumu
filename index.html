@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>IBBA Broker Directory — Dumu Holdings</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,600;1,9..144,300&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0e0e0e;
+      --surface: #161616;
+      --surface2: #1e1e1e;
+      --border: #2a2a2a;
+      --accent: #c8f060;
+      --accent2: #60c8f0;
+      --text: #e8e8e0;
+      --muted: #666;
+      --danger: #f06060;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'DM Mono', monospace;
+      font-size: 13px;
+      min-height: 100vh;
+    }
+
+    /* HEADER */
+    header {
+      padding: 24px 32px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .logo {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .logo-sup {
+      font-size: 10px;
+      color: var(--muted);
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+    }
+
+    .logo-title {
+      font-family: 'Fraunces', serif;
+      font-size: 26px;
+      font-weight: 600;
+      color: var(--text);
+      line-height: 1;
+    }
+
+    .logo-title span {
+      color: var(--accent);
+    }
+
+    .header-stats {
+      display: flex;
+      gap: 24px;
+      align-items: flex-end;
+    }
+
+    .stat-pill {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 2px;
+    }
+
+    .stat-num {
+      font-family: 'Fraunces', serif;
+      font-size: 22px;
+      font-weight: 600;
+      color: var(--accent);
+      line-height: 1;
+    }
+
+    .stat-label {
+      font-size: 10px;
+      color: var(--muted);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    /* TOOLBAR */
+    .toolbar {
+      padding: 16px 32px;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      border-bottom: 1px solid var(--border);
+      flex-wrap: wrap;
+    }
+
+    input, select {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-family: 'DM Mono', monospace;
+      font-size: 12px;
+      padding: 8px 12px;
+      border-radius: 4px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    input:focus, select:focus {
+      border-color: var(--accent);
+    }
+
+    input::placeholder { color: var(--muted); }
+
+    .search-input { width: 260px; }
+
+    .btn {
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 8px 16px;
+      border-radius: 4px;
+      border: none;
+      cursor: pointer;
+      transition: all 0.15s;
+      white-space: nowrap;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #0e0e0e;
+      font-weight: 500;
+    }
+
+    .btn-primary:hover { background: #d4f570; }
+    .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .btn-secondary {
+      background: transparent;
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    .btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
+
+    .btn-danger {
+      background: transparent;
+      color: var(--danger);
+      border: 1px solid var(--danger);
+    }
+
+    .toggle-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-left: auto;
+      color: var(--muted);
+      font-size: 11px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    input[type="checkbox"] {
+      width: 14px; height: 14px;
+      accent-color: var(--accent);
+      padding: 0;
+    }
+
+    /* SCRAPE STATUS BAR */
+    #scrape-bar {
+      display: none;
+      padding: 10px 32px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 12px;
+      color: var(--accent2);
+    }
+
+    #scrape-bar.hidden { display: none; }
+
+    .spinner {
+      width: 14px; height: 14px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent2);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      flex-shrink: 0;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* TABLE */
+    .table-wrap {
+      overflow-x: auto;
+      flex: 1;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    thead tr {
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+
+    th {
+      padding: 10px 16px;
+      text-align: left;
+      font-size: 10px;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--muted);
+      font-weight: 500;
+      white-space: nowrap;
+    }
+
+    tbody tr {
+      border-bottom: 1px solid var(--border);
+      transition: background 0.1s;
+    }
+
+    tbody tr:hover { background: var(--surface2); }
+
+    td {
+      padding: 10px 16px;
+      color: var(--text);
+      vertical-align: middle;
+    }
+
+    td.name { font-weight: 500; color: #fff; }
+
+    td.email a {
+      color: var(--accent2);
+      text-decoration: none;
+    }
+
+    td.email a:hover { text-decoration: underline; }
+
+    .tag {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 3px;
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .tag-valid { background: rgba(200,240,96,0.12); color: var(--accent); border: 1px solid rgba(200,240,96,0.25); }
+    .tag-invalid { background: rgba(240,96,96,0.12); color: var(--danger); border: 1px solid rgba(240,96,96,0.25); }
+    .tag-unchecked { background: rgba(100,100,100,0.15); color: var(--muted); border: 1px solid var(--border); }
+    .tag-in-reply { background: rgba(96,200,240,0.12); color: var(--accent2); border: 1px solid rgba(96,200,240,0.25); }
+
+    .empty-state {
+      padding: 80px 32px;
+      text-align: center;
+      color: var(--muted);
+    }
+
+    .empty-state h2 {
+      font-family: 'Fraunces', serif;
+      font-size: 22px;
+      font-weight: 300;
+      font-style: italic;
+      margin-bottom: 8px;
+      color: var(--text);
+    }
+
+    /* PAGINATION */
+    .pagination {
+      padding: 16px 32px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      border-top: 1px solid var(--border);
+      justify-content: space-between;
+    }
+
+    .page-info { color: var(--muted); font-size: 11px; }
+
+    .page-btns { display: flex; gap: 4px; }
+
+    .page-btn {
+      padding: 5px 10px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      cursor: pointer;
+      border-radius: 3px;
+    }
+
+    .page-btn:hover, .page-btn.active { border-color: var(--accent); color: var(--accent); }
+    .page-btn:disabled { opacity: 0.3; cursor: default; }
+
+    /* MODAL */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.7);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal-overlay.open { display: flex; }
+
+    .modal {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 28px;
+      width: 520px;
+      max-width: 95vw;
+    }
+
+    .modal h3 {
+      font-family: 'Fraunces', serif;
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 16px;
+    }
+
+    .modal-field { margin-bottom: 12px; }
+    .modal-field label { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin-bottom: 5px; }
+    .modal-field textarea { width: 100%; background: var(--surface2); border: 1px solid var(--border); color: var(--text); font-family: 'DM Mono', monospace; font-size: 12px; padding: 8px 12px; border-radius: 4px; resize: vertical; min-height: 80px; }
+    .modal-field select { width: 100%; }
+
+    .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+
+    /* LAYOUT */
+    .main-content {
+      display: flex;
+      flex-direction: column;
+      height: calc(100vh - 130px);
+      overflow: hidden;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <span class="logo-sup">Dumu Holdings / Deal Sourcing</span>
+    <span class="logo-title">IBBA <span>Brokers</span></span>
+  </div>
+  <div class="header-stats">
+    <div class="stat-pill">
+      <span class="stat-num" id="stat-total">—</span>
+      <span class="stat-label">Total Brokers</span>
+    </div>
+    <div class="stat-pill">
+      <span class="stat-num" id="stat-email">—</span>
+      <span class="stat-label">With Email</span>
+    </div>
+    <div class="stat-pill">
+      <span class="stat-num" id="stat-states">—</span>
+      <span class="stat-label">States</span>
+    </div>
+  </div>
+</header>
+
+<div class="toolbar">
+  <input type="text" class="search-input" placeholder="Search name, firm, email…" id="search-input" />
+  <select id="state-filter">
+    <option value="">All States</option>
+  </select>
+  <input type="text" id="city-filter" placeholder="City…" style="width:130px" />
+  <button class="btn btn-primary" id="scrape-btn" onclick="startScrape()">▶ Scrape IBBA</button>
+  <button class="btn btn-secondary" onclick="exportCSV()">↓ Export CSV</button>
+  <label class="toggle-wrap">
+    <input type="checkbox" id="email-only" onchange="loadBrokers(1)" />
+    Email only
+  </label>
+</div>
+
+<div id="scrape-bar" class="hidden">
+  <div class="spinner"></div>
+  <span id="scrape-msg">Scraping…</span>
+</div>
+
+<div class="main-content">
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Firm</th>
+          <th>City</th>
+          <th>State</th>
+          <th>Email</th>
+          <th>Phone</th>
+          <th>Email Status</th>
+          <th>In Reply</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="broker-table"></tbody>
+    </table>
+    <div id="empty-state" class="empty-state" style="display:none">
+      <h2>No brokers yet.</h2>
+      <p>Click <strong>▶ Scrape IBBA</strong> to pull the directory.</p>
+    </div>
+  </div>
+  <div class="pagination" id="pagination"></div>
+</div>
+
+<!-- Edit Modal -->
+<div class="modal-overlay" id="edit-modal">
+  <div class="modal">
+    <h3 id="modal-title">Edit Broker</h3>
+    <div class="modal-field">
+      <label>Email Status (Bouncer)</label>
+      <select id="modal-bouncer">
+        <option value="unchecked">Unchecked</option>
+        <option value="valid">Valid</option>
+        <option value="invalid">Invalid</option>
+        <option value="risky">Risky</option>
+      </select>
+    </div>
+    <div class="modal-field">
+      <label>In Reply.io</label>
+      <select id="modal-reply">
+        <option value="0">No</option>
+        <option value="1">Yes</option>
+      </select>
+    </div>
+    <div class="modal-field">
+      <label>Notes</label>
+      <textarea id="modal-notes" placeholder="Any notes on this broker…"></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveEdit()">Save</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let currentPage = 1;
+let editingId = null;
+let scrapeInterval = null;
+
+// Debounce search
+let searchTimer;
+document.getElementById("search-input").addEventListener("input", () => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => loadBrokers(1), 300);
+});
+document.getElementById("state-filter").addEventListener("change", () => loadBrokers(1));
+document.getElementById("city-filter").addEventListener("input", () => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => loadBrokers(1), 300);
+});
+
+async function loadStats() {
+  const r = await fetch("/api/stats");
+  const d = await r.json();
+  document.getElementById("stat-total").textContent = d.total.toLocaleString();
+  document.getElementById("stat-email").textContent = d.with_email.toLocaleString();
+  document.getElementById("stat-states").textContent = d.states;
+}
+
+async function loadStates() {
+  const r = await fetch("/api/states");
+  const states = await r.json();
+  const sel = document.getElementById("state-filter");
+  states.forEach(s => {
+    const o = document.createElement("option");
+    o.value = s; o.textContent = s;
+    sel.appendChild(o);
+  });
+}
+
+async function loadBrokers(page = 1) {
+  currentPage = page;
+  const search = document.getElementById("search-input").value;
+  const state = document.getElementById("state-filter").value;
+  const city = document.getElementById("city-filter").value;
+  const emailOnly = document.getElementById("email-only").checked;
+
+  const params = new URLSearchParams({ search, state, city, email_only: emailOnly, page });
+  const r = await fetch(`/api/brokers?${params}`);
+  const d = await r.json();
+
+  const tbody = document.getElementById("broker-table");
+  const empty = document.getElementById("empty-state");
+
+  if (!d.brokers.length) {
+    tbody.innerHTML = "";
+    empty.style.display = "block";
+  } else {
+    empty.style.display = "none";
+    tbody.innerHTML = d.brokers.map(b => `
+      <tr>
+        <td class="name">${esc(b.name)}</td>
+        <td>${esc(b.firm)}</td>
+        <td>${esc(b.city)}</td>
+        <td>${esc(b.state)}</td>
+        <td class="email">${b.email ? `<a href="mailto:${esc(b.email)}">${esc(b.email)}</a>` : '<span style="color:var(--muted)">—</span>'}</td>
+        <td>${esc(b.phone)}</td>
+        <td><span class="tag tag-${b.bouncer_status || 'unchecked'}">${b.bouncer_status || 'unchecked'}</span></td>
+        <td>${b.in_reply ? '<span class="tag tag-in-reply">Yes</span>' : '<span style="color:var(--muted)">—</span>'}</td>
+        <td><button class="btn btn-secondary" style="padding:4px 10px;font-size:10px" onclick="openEdit(${b.id}, '${esc(b.name)}', '${esc(b.bouncer_status)}', ${b.in_reply}, \`${esc(b.notes || '')}\`)">Edit</button></td>
+      </tr>
+    `).join("");
+  }
+
+  renderPagination(d.page, d.pages, d.total);
+}
+
+function renderPagination(page, pages, total) {
+  const el = document.getElementById("pagination");
+  if (pages <= 1) { el.innerHTML = ""; return; }
+
+  const start = (page - 1) * 50 + 1;
+  const end = Math.min(page * 50, total);
+
+  el.innerHTML = `
+    <span class="page-info">Showing ${start}–${end} of ${total}</span>
+    <div class="page-btns">
+      <button class="page-btn" onclick="loadBrokers(${page-1})" ${page === 1 ? "disabled" : ""}>← Prev</button>
+      ${Array.from({length: Math.min(pages, 7)}, (_, i) => {
+        const p = i + 1;
+        return `<button class="page-btn ${p === page ? 'active' : ''}" onclick="loadBrokers(${p})">${p}</button>`;
+      }).join("")}
+      <button class="page-btn" onclick="loadBrokers(${page+1})" ${page === pages ? "disabled" : ""}>Next →</button>
+    </div>
+  `;
+}
+
+async function startScrape() {
+  const btn = document.getElementById("scrape-btn");
+  btn.disabled = true;
+  btn.textContent = "Running…";
+  document.getElementById("scrape-bar").classList.remove("hidden");
+
+  await fetch("/api/scrape", { method: "POST" });
+
+  scrapeInterval = setInterval(async () => {
+    const r = await fetch("/api/scrape/status");
+    const d = await r.json();
+    document.getElementById("scrape-msg").textContent = `${d.message} (${d.scraped} found)`;
+
+    if (!d.running) {
+      clearInterval(scrapeInterval);
+      btn.disabled = false;
+      btn.textContent = "▶ Scrape IBBA";
+      loadBrokers(1);
+      loadStats();
+      loadStates();
+      setTimeout(() => document.getElementById("scrape-bar").classList.add("hidden"), 5000);
+    }
+  }, 2000);
+}
+
+function exportCSV() {
+  const state = document.getElementById("state-filter").value;
+  const emailOnly = document.getElementById("email-only").checked;
+  window.location.href = `/api/export?state=${state}&email_only=${emailOnly}`;
+}
+
+function openEdit(id, name, bouncer, inReply, notes) {
+  editingId = id;
+  document.getElementById("modal-title").textContent = name || "Edit Broker";
+  document.getElementById("modal-bouncer").value = bouncer || "unchecked";
+  document.getElementById("modal-reply").value = inReply ? "1" : "0";
+  document.getElementById("modal-notes").value = notes || "";
+  document.getElementById("edit-modal").classList.add("open");
+}
+
+function closeModal() {
+  document.getElementById("edit-modal").classList.remove("open");
+  editingId = null;
+}
+
+async function saveEdit() {
+  if (!editingId) return;
+  await fetch(`/api/brokers/${editingId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      bouncer_status: document.getElementById("modal-bouncer").value,
+      in_reply: parseInt(document.getElementById("modal-reply").value),
+      notes: document.getElementById("modal-notes").value
+    })
+  });
+  closeModal();
+  loadBrokers(currentPage);
+}
+
+function esc(s) {
+  if (!s) return "";
+  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");
+}
+
+// Init
+loadStats();
+loadStates();
+loadBrokers(1);
+</script>
+</body>
+</html>
