@@ -63,7 +63,7 @@ def clean_firm(text):
 def get_db():
     if not DATABASE_URL:
         raise RuntimeError("DATABASE_URL is not configured")
-    return psycopg2.connect(DATABASE_URL)
+    return psycopg2.connect(DATABASE_URL, connect_timeout=5)
 
 
 def check_db():
@@ -550,11 +550,15 @@ def debug():
     except Exception as e:
         return jsonify({"error":str(e)})
 
-# Try to connect and init DB at startup, but don't crash if it fails
-if check_db():
-    init_db()
-else:
-    print("App started WITHOUT database connection — API routes will return 503 until DB is reachable.")
+# Try to connect and init DB in a background thread so gunicorn can bind the port
+# immediately and pass Railway's healthcheck even if Postgres isn't ready yet.
+def _startup_db_check():
+    if check_db():
+        init_db()
+    else:
+        print("App started WITHOUT database connection — API routes will return 503 until DB is reachable.")
+
+threading.Thread(target=_startup_db_check, daemon=True).start()
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
