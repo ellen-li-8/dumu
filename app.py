@@ -550,15 +550,43 @@ def debug():
     except Exception as e:
         return jsonify({"error":str(e)})
 
-# Try to connect and init DB in a background thread so gunicorn can bind the port
-# immediately and pass Railway's healthcheck even if Postgres isn't ready yet.
-def _startup_db_check():
-    if check_db():
-        init_db()
+def _auto_scrape_and_enrich():
+    """On startup, wait for DB, then auto-scrape and enrich if the table is empty."""
+    # Wait for DB to become available (retry every 3s for up to 60s)
+    for _ in range(20):
+        if check_db():
+            break
+        time.sleep(3)
     else:
-        print("App started WITHOUT database connection — API routes will return 503 until DB is reachable.")
+        print("Could not connect to database after 60s — giving up auto-scrape.")
+        return
 
-threading.Thread(target=_startup_db_check, daemon=True).start()
+    init_db()
+
+    # Check if brokers table is empty
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute("SELECT COUNT(*) FROM brokers")
+        count = cur.fetchone()[0]
+        cur.close()
+        conn.close()
+    except Exception as e:
+        print(f"Auto-scrape check failed: {e}")
+        return
+
+    if count > 0:
+        print(f"Database already has {count} brokers — skipping auto-scrape.")
+        return
+
+    print("Database is empty — starting auto-scrape...")
+    scrape_ibba()
+    print("Auto-scrape complete — starting auto-enrich of all profiles...")
+    enrich_profiles_worker(limit=10000)
+    print("Auto-enrich complete.")
+
+# Run in background so gunicorn can bind the port immediately for healthcheck
+threading.Thread(target=_auto_scrape_and_enrich, daemon=True).start()
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
