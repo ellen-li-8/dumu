@@ -186,7 +186,7 @@
 <div class="modal-overlay" id="enrich-modal">
   <div class="modal" style="width:420px">
     <h3>⚡ Enrich Profiles</h3>
-    <p class="enrich-modal">Enriches the top N brokers from your <strong>current filtered view</strong> — pulling phone, email, firm, website, specialties, and bio from their IBBA profile. Only unenriched brokers are included. ~0.8s per profile.</p>
+    <p class="enrich-modal">Enriches the top N unenriched brokers matching your current <strong>state</strong> and <strong>search</strong> filters — pulling phone, email, firm, website, specialties, and bio from each IBBA profile. Specialty filter is not applied here since brokers have no specialties until enriched. ~0.8s per profile.</p>
     <div class="modal-field"><label>How many profiles?</label>
       <select id="enrich-limit">
         <option value="25">25 profiles (~20 sec)</option>
@@ -341,11 +341,10 @@ function closeEnrichModal(){document.getElementById("enrich-modal").classList.re
 async function confirmEnrich(){
   var limit=document.getElementById("enrich-limit").value;
   var state=document.getElementById("state-filter").value;
-  var specialty=document.getElementById("specialty-filter").value;
   var search=document.getElementById("search-input").value;
   closeEnrichModal();
   document.getElementById("enrich-bar").classList.remove("hidden");
-  await fetch("/api/enrich",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({limit:parseInt(limit),state:state,specialty:specialty,search:search})});
+  await fetch("/api/enrich",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({limit:parseInt(limit),state:state,search:search})});
   enrichInterval=setInterval(async function(){
     var d=await(await fetch("/api/enrich/status")).json();
     document.getElementById("enrich-msg").textContent=d.message;
@@ -363,8 +362,11 @@ async function confirmEnrich(){
 
 function exportCSV(){
   var state=document.getElementById("state-filter").value;
+  var specialty=document.getElementById("specialty-filter").value;
+  var search=document.getElementById("search-input").value;
   var emailOnly=document.getElementById("email-only").checked;
-  window.location.href="/api/export?state="+state+"&email_only="+emailOnly;
+  var params=new URLSearchParams({state:state,specialty:specialty,search:search,email_only:emailOnly});
+  window.location.href="/api/export?"+params;
 }
 
 function openEdit(id){
@@ -397,7 +399,7 @@ async function saveEdit(){
       phone:document.getElementById("modal-phone").value,
       state:document.getElementById("modal-state").value,
       bouncer_status:document.getElementById("modal-bouncer").value,
-      in_reply:parseInt(document.getElementById("modal-reply").value),
+      in_reply:document.getElementById("modal-reply").value==="1",
       notes:document.getElementById("modal-notes").value
     })
   });
