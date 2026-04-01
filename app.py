@@ -7,6 +7,17 @@ import psycopg2.extras
 app = Flask(__name__)
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
 
+# Startup check: warn clearly if DATABASE_URL is missing
+if not DATABASE_URL:
+    print("=" * 60)
+    print("WARNING: DATABASE_URL is not set!")
+    print("The app will start but all API routes will return 503")
+    print("until a valid PostgreSQL connection is available.")
+    print("Set DATABASE_URL in your Railway environment variables.")
+    print("=" * 60)
+
+db_available = False
+
 scrape_status = {"running":False,"total":0,"scraped":0,"message":"Idle","last_error":""}
 enrich_status = {"running":False,"total":0,"done":0,"message":"Idle"}
 
@@ -50,7 +61,37 @@ def clean_firm(text):
     return result if result.lower() not in CREDENTIAL_TOKENS else ""
 
 def get_db():
+    if not DATABASE_URL:
+        raise RuntimeError("DATABASE_URL is not configured")
     return psycopg2.connect(DATABASE_URL)
+
+
+def check_db():
+    """Try to connect to the database. Returns True if successful."""
+    global db_available
+    try:
+        conn = get_db()
+        conn.close()
+        db_available = True
+        return True
+    except Exception as e:
+        print(f"DB connection failed: {e}")
+        db_available = False
+        return False
+
+
+def require_db(f):
+    """Decorator that returns 503 if database is not available."""
+    from functools import wraps
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        if not db_available:
+            if not check_db():
+                return jsonify({"error": "Database unavailable — please try again shortly"}), 503
+            init_db()
+        return f(*args, **kwargs)
+    return wrapper
+
 
 def init_db():
     conn = get_db()
@@ -336,6 +377,7 @@ def index():
     return render_template("index.html")
 
 @app.route("/api/brokers")
+@require_db
 def get_brokers():
     search     = request.args.get("search","").strip()
     state      = request.args.get("state","").strip()
@@ -372,6 +414,7 @@ def get_brokers():
         return jsonify({"brokers":[],"total":0,"page":1,"pages":1,"error":str(e)})
 
 @app.route("/api/states")
+@require_db
 def get_states():
     try:
         conn = get_db()
@@ -384,6 +427,7 @@ def get_states():
         return jsonify([])
 
 @app.route("/api/specialties")
+@require_db
 def get_specialties():
     try:
         conn = get_db()
@@ -402,6 +446,7 @@ def get_specialties():
         return jsonify([])
 
 @app.route("/api/stats")
+@require_db
 def stats():
     try:
         conn = get_db()
@@ -416,6 +461,7 @@ def stats():
         return jsonify({"total":0,"with_email":0,"states":0,"enriched":0})
 
 @app.route("/api/scrape", methods=["POST"])
+@require_db
 def start_scrape():
     if scrape_status["running"]:
         return jsonify({"error":"Scrape already running"}), 400
@@ -428,6 +474,7 @@ def get_scrape_status():
     return jsonify(scrape_status)
 
 @app.route("/api/enrich", methods=["POST"])
+@require_db
 def start_enrich():
     if enrich_status["running"]:
         return jsonify({"error":"Enrichment already running"}), 400
@@ -444,6 +491,7 @@ def get_enrich_status():
     return jsonify(enrich_status)
 
 @app.route("/api/brokers/<int:broker_id>", methods=["PATCH"])
+@require_db
 def update_broker(broker_id):
     data = request.json or {}
     allowed = ["name","state","firm","email","phone","bio","specialties","notes","bouncer_status","in_reply"]
@@ -457,6 +505,7 @@ def update_broker(broker_id):
     return jsonify({"ok":True})
 
 @app.route("/api/export")
+@require_db
 def export_csv():
     search     = request.args.get("search","").strip()
     state      = request.args.get("state","").strip()
@@ -482,6 +531,7 @@ def export_csv():
                     headers={"Content-Disposition":"attachment;filename=ibba_brokers.csv"})
 
 @app.route("/api/debug")
+@require_db
 def debug():
     try:
         conn = get_db()
@@ -500,7 +550,12 @@ def debug():
     except Exception as e:
         return jsonify({"error":str(e)})
 
-if __name__ == "__main__":
+# Try to connect and init DB at startup, but don't crash if it fails
+if check_db():
     init_db()
+else:
+    print("App started WITHOUT database connection — API routes will return 503 until DB is reachable.")
+
+if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=False)
