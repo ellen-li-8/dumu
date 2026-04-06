@@ -6,9 +6,18 @@ import psycopg2
 import psycopg2.extras
 
 app = Flask(__name__)
-DATABASE_URL = os.environ.get("DATABASE_URL", "")
 
-# Startup check: warn clearly if DATABASE_URL is missing
+# Railway provides several possible Postgres env vars — try them all
+DATABASE_URL = (
+    os.environ.get("DATABASE_URL") or
+    os.environ.get("DATABASE_PRIVATE_URL") or
+    os.environ.get("DATABASE_PUBLIC_URL") or
+    ""
+)
+# Railway/Heroku use postgres:// but psycopg2 requires postgresql://
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
 if not DATABASE_URL:
     print("=" * 60)
     print("WARNING: DATABASE_URL is not set!")
@@ -16,6 +25,10 @@ if not DATABASE_URL:
     print("until a valid PostgreSQL connection is available.")
     print("Set DATABASE_URL in your Railway environment variables.")
     print("=" * 60)
+else:
+    # Log which var we found (mask the password)
+    masked = re.sub(r'://[^@]+@', '://***@', DATABASE_URL)
+    print(f"Using database: {masked}")
 
 db_available = False
 
