@@ -217,7 +217,11 @@ async function loadBrokers(page){
   var emailOnly=document.getElementById("email-only").checked;
   var specialty=document.getElementById("specialty-filter").value;
   var params=new URLSearchParams({search:search,state:state,specialty:specialty,email_only:emailOnly,page:page});
-  var d=await(await fetch("/api/brokers?"+params)).json();
+  var d;
+  try {
+    var resp=await fetch("/api/brokers?"+params);
+    d=await resp.json();
+  } catch(e){ return; } // silently retry on next poll
   var tbody=document.getElementById("broker-table");
   var empty=document.getElementById("empty-state");
 
@@ -382,7 +386,17 @@ async function saveEdit(){
 
 function esc(s){if(!s)return"";return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;")}
 
-loadStats(); loadStates(); loadSpecialties(); loadBrokers(1);
+// Initial load with retry — DB may not be ready yet on first deploy
+(async function initLoad(){
+  for(var attempt=0;attempt<20;attempt++){
+    try {
+      var resp=await fetch("/api/stats");
+      if(resp.ok){ loadStats(); loadStates(); loadSpecialties(); loadBrokers(1); return; }
+    } catch(e){}
+    await new Promise(function(r){setTimeout(r,3000)});
+  }
+  loadStats(); loadStates(); loadSpecialties(); loadBrokers(1);
+})();
 </script>
 </body>
 </html>

@@ -1,5 +1,6 @@
 from flask import Flask, render_template, jsonify, request, Response
 import os, requests, time, threading, csv, io, traceback, re
+from urllib.parse import urlparse, urljoin
 from bs4 import BeautifulSoup
 import psycopg2
 import psycopg2.extras
@@ -355,6 +356,218 @@ def enrich_profiles_worker(limit, state="", search=""):
         enrich_status["running"] = False
         enrich_status["message"] = f"Done! Enriched {enrich_status['done']} profiles."
 
+EMAIL_RE = re.compile(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}')
+PHONE_RE = re.compile(r'(?:\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}')
+JUNK_EMAIL_DOMAINS = {
+    "example.com","sentry.io","ibba.org","wordpress.org","w3.org","schema.org",
+    "google.com","facebook.com","twitter.com","linkedin.com","instagram.com",
+    "youtube.com","gravatar.com","wixpress.com","squarespace.com","cloudflare.com",
+    "googleapis.com","gstatic.com","wpengine.com","wp.com","mailchimp.com",
+    "constantcontact.com","hubspot.com","salesforce.com","zendesk.com",
+}
+
+def scrape_website_for_contact(url, broker_name, headers):
+    """Visit a company website and its contact page to find email and phone."""
+    result = {"email":"","phone":""}
+    if not url:
+        return result
+    if not url.startswith("http"):
+        url = "https://" + url
+    try:
+        parsed = urlparse(url)
+        domain = parsed.netloc.replace("www.","")
+    except Exception:
+        return result
+
+    pages_to_try = [url]
+    base = f"{parsed.scheme}://{parsed.netloc}"
+    for suffix in ["/contact","/contact-us","/about","/about-us","/team","/our-team"]:
+        pages_to_try.append(base + suffix)
+
+    name_parts = [p.lower() for p in broker_name.split() if len(p) > 2]
+    all_emails = []
+    all_phones = []
+
+    for page_url in pages_to_try[:4]:
+        try:
+            resp = requests.get(page_url, headers=headers, timeout=10, allow_redirects=True)
+            if resp.status_code != 200:
+                continue
+            text = resp.text
+            for email in EMAIL_RE.findall(text):
+                edom = email.lower().split("@")[1]
+                if edom in JUNK_EMAIL_DOMAINS:
+                    continue
+                if domain in edom or edom in domain:
+                    all_emails.insert(0, email)
+                else:
+                    all_emails.append(email)
+            for phone in PHONE_RE.findall(text):
+                digits = re.sub(r'\D','',phone)
+                if 10 <= len(digits) <= 11:
+                    all_phones.append(phone.strip())
+        except Exception:
+            continue
+        time.sleep(0.4)
+
+    # Prefer email matching broker name on company domain
+    for email in all_emails:
+        local = email.lower().split("@")[0]
+        if any(part in local for part in name_parts):
+            result["email"] = email
+            break
+    if not result["email"]:
+        for email in all_emails:
+            if domain in email.lower():
+                result["email"] = email
+                break
+    if all_phones:
+        result["phone"] = all_phones[0]
+    return result
+
+
+def search_web_for_broker(name, firm, state, headers):
+    """Search DuckDuckGo for a broker's contact info when IBBA doesn't have it."""
+    result = {"email":"","phone":"","website":""}
+    if not name:
+        return result
+
+    query = f'"{name}" {firm} {state} business broker'
+    try:
+        resp = requests.get(
+            "https://html.duckduckgo.com/html/",
+            params={"q": query},
+            headers=headers, timeout=15
+        )
+        if resp.status_code != 200:
+            return result
+        soup = BeautifulSoup(resp.text, "html.parser")
+
+        name_parts = [p.lower() for p in name.split() if len(p) > 2]
+        firm_lower = firm.lower().strip() if firm else ""
+
+        # Extract emails from result snippets — only if broker name appears nearby
+        for snippet in soup.select(".result__snippet"):
+            text = snippet.get_text()
+            context_lower = text.lower()
+            if not any(part in context_lower for part in name_parts):
+                continue
+            for email in EMAIL_RE.findall(text):
+                edom = email.lower().split("@")[1]
+                if edom not in JUNK_EMAIL_DOMAINS:
+                    result["email"] = email
+                    break
+            if result["email"]:
+                break
+
+        # Find company website from result links
+        for link in soup.select(".result__a"):
+            href = link.get("href","")
+            link_text = link.get_text(strip=True).lower()
+            parent_text = (link.parent.get_text() if link.parent else "").lower()
+            # Skip IBBA, social media, and directory sites
+            skip = ["ibba.org","linkedin.com","facebook.com","yelp.com","bbb.org",
+                    "mapquest.com","yellowpages.com","duckduckgo.com","wikipedia.org"]
+            if any(s in href.lower() for s in skip):
+                continue
+            # Check if firm name or broker name appears in result
+            if (firm_lower and any(w in link_text or w in parent_text for w in firm_lower.split() if len(w)>3)) \
+               or any(part in parent_text for part in name_parts):
+                url_match = re.search(r'https?://[^\s"<>&]+', href)
+                if url_match:
+                    result["website"] = url_match.group().split("?")[0].rstrip("/")
+                    break
+
+    except Exception:
+        pass
+    return result
+
+
+def web_enrich_worker():
+    """Third enrichment pass: find missing email/phone via company websites and web search.
+    Only saves data when confident it belongs to the right person."""
+    global enrich_status
+    enrich_status.update({"running":True,"done":0,"total":0,"message":"Web enrichment: finding missing contact info..."})
+    headers = {"User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
+    conn = None
+    found = 0
+    try:
+        conn = get_db()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cur.execute("""
+            SELECT id, name, firm, state, website, phone
+            FROM brokers
+            WHERE enriched=TRUE AND (email = '' OR email IS NULL)
+            ORDER BY state, name
+        """)
+        rows = list(cur.fetchall())
+        enrich_status["total"] = len(rows)
+
+        if not rows:
+            enrich_status.update({"running":False,"message":"All brokers already have emails."})
+            return
+
+        for i, row in enumerate(rows):
+            enrich_status["message"] = f"Web enriching {i+1} of {len(rows)}: {row['name']}..."
+            enrich_status["done"] = i
+
+            email = ""
+            phone = ""
+            website = row.get("website","")
+
+            # Step 1: scrape company website if we have one
+            if website:
+                data = scrape_website_for_contact(website, row["name"], headers)
+                email = data.get("email","")
+                if not row.get("phone",""):
+                    phone = data.get("phone","")
+
+            # Step 2: web search fallback
+            if not email and row.get("name",""):
+                search_data = search_web_for_broker(row["name"], row.get("firm",""), row.get("state",""), headers)
+                if not email:
+                    email = search_data.get("email","")
+                if not website and search_data.get("website"):
+                    website = search_data["website"]
+                    # Scrape newly found website for email
+                    if not email:
+                        data2 = scrape_website_for_contact(website, row["name"], headers)
+                        email = data2.get("email","")
+                        if not phone and not row.get("phone",""):
+                            phone = data2.get("phone","")
+                if not phone and not row.get("phone",""):
+                    phone = search_data.get("phone","")
+
+            # Save anything we found
+            updates = []
+            params = []
+            if email:
+                updates.append("email = %s"); params.append(email)
+                found += 1
+            if phone and not row.get("phone",""):
+                updates.append("phone = CASE WHEN phone = '' THEN %s ELSE phone END"); params.append(phone)
+            if website and not row.get("website",""):
+                updates.append("website = %s"); params.append(website)
+            if updates:
+                params.append(row["id"])
+                cur.execute(f"UPDATE brokers SET {', '.join(updates)} WHERE id = %s", params)
+                conn.commit()
+
+            enrich_status["done"] = i + 1
+            time.sleep(1.2)
+
+    except Exception as e:
+        enrich_status["message"] = f"Web enrich error: {str(e)}"
+    finally:
+        try:
+            if conn:
+                conn.commit(); cur.close(); conn.close()
+        except Exception:
+            pass
+        enrich_status["running"] = False
+        enrich_status["message"] = f"Done! Found {found} additional emails via web search."
+
+
 def build_broker_query(search, state, specialty, email_only):
     """Single source of truth for broker filter query — used by list and export."""
     q = "SELECT * FROM brokers WHERE 1=1"
@@ -581,9 +794,11 @@ def _auto_scrape_and_enrich():
 
     print("Database is empty — starting auto-scrape...")
     scrape_ibba()
-    print("Auto-scrape complete — starting auto-enrich of all profiles...")
+    print("Auto-scrape complete — starting IBBA profile enrichment...")
     enrich_profiles_worker(limit=10000)
-    print("Auto-enrich complete.")
+    print("IBBA enrichment complete — starting web enrichment for missing data...")
+    web_enrich_worker()
+    print("All enrichment complete.")
 
 # Run in background so gunicorn can bind the port immediately for healthcheck
 threading.Thread(target=_auto_scrape_and_enrich, daemon=True).start()
