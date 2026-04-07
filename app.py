@@ -557,3 +557,160 @@ def debug():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=False)
+
+# ── Reply.io integration ──────────────────────────────────
+REPLYIO_API_KEY = os.environ.get("REPLYIO_API_KEY", "")
+
+def replyio_headers():
+    return {"x-api-key": REPLYIO_API_KEY, "Content-Type": "application/json"}
+
+@app.route("/api/replyio/campaigns", methods=["GET"])
+def get_replyio_campaigns():
+    """Fetch all campaigns/sequences from Reply.io"""
+    if not REPLYIO_API_KEY:
+        return jsonify({"error": "REPLYIO_API_KEY not configured"}), 400
+    try:
+        resp = requests.get(
+            "https://api.reply.io/v1/campaigns",
+            headers=replyio_headers(), timeout=10
+        )
+        return jsonify(resp.json())
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/replyio/push", methods=["POST"])
+def push_to_replyio():
+    """Push filtered broker list to a Reply.io campaign"""
+    if not REPLYIO_API_KEY:
+        return jsonify({"error": "REPLYIO_API_KEY not configured"}), 400
+    data        = request.json or {}
+    campaign_id = data.get("campaign_id")
+    search      = data.get("search","")
+    state       = data.get("state","")
+    specialty   = data.get("specialty","")
+    if not campaign_id:
+        return jsonify({"error": "campaign_id required"}), 400
+    try:
+        conn = get_db()
+        cur  = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        q, p = build_broker_query(search, state, specialty, email_only=True)  # email required
+        q = q.replace("SELECT *","SELECT name,firm,email,phone,state,website",1)
+        q += " ORDER BY state, name"
+        cur.execute(q, p)
+        brokers = cur.fetchall()
+        cur.close(); conn.close()
+
+        pushed = 0
+        errors = []
+        for b in brokers:
+            parts     = b["name"].split()
+            first     = parts[0] if parts else b["name"]
+            last      = " ".join(parts[1:]) if len(parts) > 1 else ""
+            contact   = {
+                "firstName":   first,
+                "lastName":    last,
+                "email":       b["email"],
+                "company":     b["firm"] or "",
+                "phone":       b["phone"] or "",
+                "website":     b["website"] or "",
+                "customField1": b["state"] or "",
+            }
+            try:
+                r = requests.post(
+                    f"https://api.reply.io/v1/campaigns/{campaign_id}/contacts",
+                    headers=replyio_headers(),
+                    json={"contact": contact},
+                    timeout=10
+                )
+                if r.status_code in (200, 201):
+                    pushed += 1
+                    # Mark as in_reply
+                    conn2 = get_db(); cur2 = conn2.cursor()
+                    cur2.execute("UPDATE brokers SET in_reply=TRUE WHERE email=%s", (b["email"],))
+                    conn2.commit(); cur2.close(); conn2.close()
+                else:
+                    errors.append({"email": b["email"], "status": r.status_code, "msg": r.text[:100]})
+            except Exception as ex:
+                errors.append({"email": b["email"], "error": str(ex)})
+            time.sleep(0.15)  # rate limit
+
+        return jsonify({"pushed": pushed, "errors": errors[:20], "total": len(brokers)})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# ── CSV import with deduplication ────────────────────────
+@app.route("/api/import", methods=["POST"])
+def import_csv():
+    """
+    Import a CSV of brokers. Deduplicates by email (exact match) and
+    by name+firm (fuzzy: lowercase, strip spaces).
+    Expected columns (case-insensitive): name, email, firm/company, state, phone
+    """
+    if "file" not in request.files:
+        return jsonify({"error": "No file uploaded"}), 400
+    f = request.files["file"]
+    if not f.filename.endswith(".csv"):
+        return jsonify({"error": "File must be a .csv"}), 400
+    try:
+        content  = f.read().decode("utf-8-sig")  # handle BOM
+        reader   = csv.DictReader(io.StringIO(content))
+        # Normalize headers to lowercase
+        rows_raw = list(reader)
+        if not rows_raw:
+            return jsonify({"error": "CSV is empty"}), 400
+
+        def col(row, *names):
+            for n in names:
+                for k in row:
+                    if k.lower().strip() == n.lower():
+                        return row[k].strip()
+            return ""
+
+        conn = get_db()
+        cur  = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+        # Load existing emails and name+firm keys for dedup
+        cur.execute("SELECT email, LOWER(name||'|'||firm) as key FROM brokers")
+        existing = cur.fetchall()
+        existing_emails   = {r["email"].lower() for r in existing if r["email"]}
+        existing_namekeys = {r["key"] for r in existing}
+
+        inserted = 0
+        dupes    = 0
+        wcur     = conn.cursor()
+
+        for row in rows_raw:
+            name  = col(row, "name","full name","broker name","contact")
+            email = col(row, "email","email address","e-mail")
+            firm  = col(row, "firm","company","brokerage","organization","broker firm")
+            state = col(row, "state","location","province")
+            phone = col(row, "phone","phone number","tel","telephone")
+
+            if not name and not email:
+                continue
+
+            # Dedup checks
+            if email and email.lower() in existing_emails:
+                dupes += 1; continue
+            namekey = (name + "|" + firm).lower()
+            if namekey in existing_namekeys:
+                dupes += 1; continue
+
+            try:
+                wcur.execute("""
+                    INSERT INTO brokers (name, firm, state, email, phone, website, profile_url)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s)
+                    ON CONFLICT (profile_url) DO NOTHING
+                """, (clean_name(name), clean_firm(firm), state, email, phone, "", None))
+                inserted += 1
+                if email:
+                    existing_emails.add(email.lower())
+                existing_namekeys.add(namekey)
+            except Exception:
+                pass
+
+        conn.commit()
+        wcur.close(); cur.close(); conn.close()
+        return jsonify({"imported": inserted, "duplicates_skipped": dupes, "total_rows": len(rows_raw)})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
