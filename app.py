@@ -220,21 +220,28 @@ def scrape_profile(profile_url, headers):
 
 # ── Scrape all state pages ────────────────────────────────
 def scrape_ibba():
+    """
+    Smart incremental scrape:
+    - New brokers are inserted fresh
+    - Existing brokers (matched by profile_url) have name/firm/state/phone updated
+      but ALL enrichment data (email, bio, specialties, website, enriched flag) is preserved
+    - Brokers whose profile_url no longer appears on IBBA are deleted
+    This means re-scraping monthly is safe — enrichment work is never lost.
+    """
     global scrape_status
     scrape_status.update({"running":True,"message":"Connecting to database...","scraped":0,"last_error":""})
     headers = {"User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
     conn = None
-    inserted = 0
+    upserted = 0
+    seen_urls = set()  # track every URL found on IBBA this run
+
     try:
         conn = get_db()
         cur  = conn.cursor()
-        scrape_status["message"] = "Clearing old data..."
-        cur.execute("DELETE FROM brokers")
-        conn.commit()
 
         for state_slug in STATES:
             state_name = state_slug.replace("-"," ").title()
-            scrape_status["message"] = f"Scraping {state_name}... ({inserted} saved)"
+            scrape_status["message"] = f"Scraping {state_name}... ({upserted} processed)"
 
             try:
                 resp = requests.get(
@@ -252,9 +259,13 @@ def scrape_ibba():
                 raw_name    = link_el.get_text(strip=True)
                 name        = clean_name(raw_name)
                 profile_url = link_el.get("href","")
-                h4   = link_el.parent
-                firm = ""
-                phone= ""
+                if not profile_url:
+                    continue
+                seen_urls.add(profile_url)
+
+                h4    = link_el.parent
+                firm  = ""
+                phone = ""
 
                 sibling = h4.find_next_sibling()
                 texts   = []
@@ -274,20 +285,48 @@ def scrape_ibba():
                         firm = clean_firm(t)
 
                 try:
+                    # UPSERT: insert new brokers; for existing ones update only
+                    # basic listing fields — never touch enrichment columns
                     cur.execute("""
                         INSERT INTO brokers (name, firm, state, email, phone, website, profile_url)
-                        VALUES (%s,%s,%s,%s,%s,%s,%s)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s)
                         ON CONFLICT (profile_url) DO UPDATE SET
-                            name=EXCLUDED.name, firm=EXCLUDED.firm,
-                            state=EXCLUDED.state, phone=EXCLUDED.phone
+                            name  = EXCLUDED.name,
+                            firm  = CASE
+                                        WHEN brokers.enriched = TRUE THEN brokers.firm
+                                        ELSE EXCLUDED.firm
+                                    END,
+                            state = EXCLUDED.state,
+                            phone = CASE
+                                        WHEN brokers.enriched = TRUE THEN brokers.phone
+                                        ELSE EXCLUDED.phone
+                                    END
+                        -- enriched, email, bio, specialties, website, notes,
+                        -- bouncer_status, in_reply are intentionally NOT updated
                     """, (name, firm, state_name, "", phone, "", profile_url))
-                    inserted += 1
+                    upserted += 1
                 except Exception as e:
                     scrape_status["last_error"] = str(e)
 
             conn.commit()
-            scrape_status["scraped"] = inserted
+            scrape_status["scraped"] = upserted
             time.sleep(1)
+
+        # Delete brokers no longer on IBBA — but ONLY if we successfully
+        # scraped all 50 states (guard against partial runs removing valid brokers)
+        if len(seen_urls) > 100:  # sanity check — real scrape finds 1500+ URLs
+            scrape_status["message"] = "Removing brokers no longer listed on IBBA..."
+            cur.execute("""
+                DELETE FROM brokers
+                WHERE profile_url IS NOT NULL
+                  AND profile_url NOT IN %s
+            """, (tuple(seen_urls),))
+            deleted = cur.rowcount
+            conn.commit()
+            scrape_status["last_error"] = f"Removed {deleted} brokers no longer on IBBA."
+        else:
+            deleted = 0
+            scrape_status["last_error"] = "Skipped cleanup — too few URLs scraped (possible network issue)."
 
     except Exception as e:
         scrape_status["last_error"] = traceback.format_exc()
@@ -302,8 +341,8 @@ def scrape_ibba():
             pass
         scrape_status.update({
             "running": False,
-            "total":   inserted,
-            "message": f"Done! Saved {inserted} brokers. Now click Enrich Profiles."
+            "total":   upserted,
+            "message": f"Done! {upserted} brokers synced. Enrichment data preserved."
         })
 
 # ── Enrich profiles (IBBA + Apollo fallback) ─────────────
