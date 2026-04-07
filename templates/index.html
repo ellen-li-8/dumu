@@ -57,7 +57,6 @@
     .expand-inner.open{display:block}
     .expand-section{margin-top:10px}
     .expand-section-label{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
-    .expand-bio{font-size:12px;color:var(--muted);line-height:1.6;max-width:800px}
     .expand-specs{display:flex;flex-wrap:wrap;gap:5px}
     td{padding:9px 14px;color:var(--text);vertical-align:middle;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     td.name-cell{font-weight:500;color:#fff;max-width:180px;white-space:normal}
@@ -132,9 +131,6 @@
   <button class="btn btn-reply"                    onclick="openReplyModal()">→ Reply.io</button>
   <button class="btn btn-import"                   onclick="openImportModal()">↑ Import</button>
   <button class="btn btn-secondary"                onclick="exportCSV()">↓ CSV</button>
-  <label class="toggle-wrap">
-    <input type="checkbox" id="email-only" onchange="loadBrokers(1)"/> Email only
-  </label>
 </div>
 
 <div id="scrape-bar" class="status-bar scrape-bar hidden">
@@ -321,8 +317,7 @@ async function loadBrokers(page){
   var search=document.getElementById("search-input").value;
   var state=document.getElementById("state-filter").value;
   var specialty=document.getElementById("specialty-filter").value;
-  var emailOnly=document.getElementById("email-only").checked;
-  var params=new URLSearchParams({search:search,state:state,specialty:specialty,email_only:emailOnly,page:page});
+  var params=new URLSearchParams({search:search,state:state,specialty:specialty,page:page});
   var d;
   try{ d=await(await fetch("/api/brokers?"+params)).json(); }catch(e){ return; }
 
@@ -337,7 +332,7 @@ async function loadBrokers(page){
   var rows="";
   d.brokers.forEach(function(b){
     // Expand row shows specialties + bio — trigger only if either exists
-    var hasExpand = (b.specialties && b.specialties.length>0) || (b.bio && b.bio.length>0);
+    var hasExpand = (b.specialties && b.specialties.length>0);
     var expandIcon = hasExpand ? '<span class="expand-icon" id="ei-'+b.id+'">▶</span>' : '';
 
     // Show first 2 spec tags inline under name
@@ -359,9 +354,6 @@ async function loadBrokers(page){
         s=s.trim(); if(s) expandContent+='<span class="spec-tag">'+esc(s)+'</span>';
       });
       expandContent+='</div></div>';
-    }
-    if(b.bio){
-      expandContent+='<div class="expand-section" style="margin-top:12px"><div class="expand-section-label">About</div><div class="expand-bio">'+esc(b.bio)+'</div></div>';
     }
     expandContent+='</div>';
 
@@ -593,8 +585,7 @@ function exportCSV(){
   var params=new URLSearchParams({
     state:     document.getElementById("state-filter").value,
     specialty: document.getElementById("specialty-filter").value,
-    search:    document.getElementById("search-input").value,
-    email_only:document.getElementById("email-only").checked
+    search:    document.getElementById("search-input").value
   });
   window.location.href="/api/export?"+params;
 }
