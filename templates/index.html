@@ -22,7 +22,7 @@
     input,select{background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'DM Mono',monospace;font-size:12px;padding:7px 11px;border-radius:4px;outline:none;transition:border-color .15s}
     input:focus,select:focus{border-color:var(--accent)}
     input::placeholder{color:var(--muted)}
-    .search-input{width:230px}
+    .search-input{width:220px}
     .btn{font-family:'DM Mono',monospace;font-size:11px;letter-spacing:.08em;text-transform:uppercase;padding:7px 14px;border-radius:4px;border:none;cursor:pointer;transition:all .15s;white-space:nowrap}
     .btn-primary{background:var(--accent);color:#0e0e0e;font-weight:500}
     .btn-primary:hover{background:#d4f570}
@@ -36,8 +36,8 @@
     input[type="checkbox"]{width:13px;height:13px;accent-color:var(--accent);padding:0}
     .status-bar{padding:9px 28px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;font-size:12px;flex-shrink:0}
     .status-bar.hidden{display:none}
-    .status-bar.scrape{color:var(--accent2)}
-    .status-bar.enrich{color:var(--accent)}
+    .status-bar.scrape-bar{color:var(--accent2)}
+    .status-bar.enrich-bar{color:var(--accent)}
     .spinner{width:13px;height:13px;border:2px solid var(--border);border-top-color:currentColor;border-radius:50%;animation:spin .8s linear infinite;flex-shrink:0}
     @keyframes spin{to{transform:rotate(360deg)}}
     .main-content{flex:1;display:flex;flex-direction:column;overflow:hidden}
@@ -52,7 +52,7 @@
     .bio-inner{padding:0 14px 12px 14px;color:var(--muted);font-size:12px;line-height:1.6;max-width:900px;display:none}
     .bio-inner.open{display:block}
     td{padding:9px 14px;color:var(--text);vertical-align:middle;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-    td.name-cell{font-weight:500;color:#fff;max-width:160px}
+    td.name-cell{font-weight:500;color:#fff;max-width:200px;white-space:normal}
     td.email-cell a{color:var(--accent2);text-decoration:none}
     td.email-cell a:hover{text-decoration:underline}
     .expand-icon{color:var(--muted);font-size:11px;transition:transform .2s;display:inline-block;margin-right:4px}
@@ -62,8 +62,10 @@
     .tag-invalid{background:rgba(240,96,96,.12);color:var(--danger);border:1px solid rgba(240,96,96,.25)}
     .tag-unchecked{background:rgba(100,100,100,.15);color:var(--muted);border:1px solid var(--border)}
     .tag-in-reply{background:rgba(96,200,240,.12);color:var(--accent2);border:1px solid rgba(96,200,240,.25)}
+    .spec-tag{display:inline-block;padding:1px 6px;border-radius:3px;font-size:9px;background:rgba(200,240,96,.1);color:var(--accent);border:1px solid rgba(200,240,96,.2);margin:1px 2px 1px 0;white-space:nowrap}
     .empty-state{padding:60px 28px;text-align:center;color:var(--muted)}
     .empty-state h2{font-family:'Fraunces',serif;font-size:20px;font-weight:300;font-style:italic;margin-bottom:8px;color:var(--text)}
+    .empty-state p{margin-bottom:20px}
     .pagination{padding:12px 28px;display:flex;align-items:center;gap:8px;border-top:1px solid var(--border);justify-content:space-between;flex-shrink:0}
     .page-info{color:var(--muted);font-size:11px}
     .page-btns{display:flex;gap:4px}
@@ -80,9 +82,9 @@
     .modal-field textarea{resize:vertical;min-height:70px}
     .modal-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
     .modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:18px}
-    .progress-bar{height:4px;background:var(--border);border-radius:2px;overflow:hidden;margin-top:8px}
+    .progress-bar{height:4px;background:var(--border);border-radius:2px;overflow:hidden}
     .progress-fill{height:100%;background:var(--accent);transition:width .3s}
-    .enrich-modal p{color:var(--muted);font-size:12px;line-height:1.6;margin-bottom:14px}
+    .modal-note{font-size:11px;color:var(--muted);line-height:1.6;margin-bottom:14px}
   </style>
 </head>
 <body>
@@ -104,20 +106,23 @@
   <input type="text" class="search-input" placeholder="Search name, firm, email…" id="search-input"/>
   <select id="state-filter"><option value="">All States</option></select>
   <select id="specialty-filter"><option value="">All Specialties</option></select>
-  <button class="btn btn-primary" id="scrape-btn" onclick="startScrape()">▶ Scrape IBBA</button>
-  <button class="btn btn-enrich" id="enrich-btn" onclick="openEnrichModal()">⚡ Enrich Profiles</button>
-  <button class="btn btn-secondary" onclick="exportCSV()">↓ CSV</button>
+  <button class="btn btn-primary"   id="scrape-btn"  onclick="startScrape()">▶ Scrape IBBA</button>
+  <button class="btn btn-enrich"    id="enrich-btn"  onclick="openEnrichModal()">⚡ Enrich</button>
+  <button class="btn btn-secondary"                  onclick="exportCSV()">↓ CSV</button>
   <label class="toggle-wrap">
     <input type="checkbox" id="email-only" onchange="loadBrokers(1)"/> Email only
   </label>
 </div>
 
-<div id="scrape-bar" class="status-bar scrape hidden">
+<div id="scrape-bar" class="status-bar scrape-bar hidden">
   <div class="spinner"></div><span id="scrape-msg">Scraping…</span>
 </div>
-<div id="enrich-bar" class="status-bar enrich hidden">
-  <div class="spinner"></div><span id="enrich-msg">Enriching…</span>
-  <div style="flex:1;margin-left:12px"><div class="progress-bar"><div class="progress-fill" id="enrich-progress" style="width:0%"></div></div></div>
+<div id="enrich-bar" class="status-bar enrich-bar hidden">
+  <div class="spinner"></div>
+  <span id="enrich-msg">Enriching…</span>
+  <div style="flex:1;margin-left:12px">
+    <div class="progress-bar"><div class="progress-fill" id="enrich-progress" style="width:0%"></div></div>
+  </div>
 </div>
 
 <div class="main-content">
@@ -125,7 +130,7 @@
     <table>
       <thead>
         <tr>
-          <th style="width:24px"></th>
+          <th style="width:20px"></th>
           <th style="min-width:180px">Name</th>
           <th>Firm</th>
           <th>State</th>
@@ -142,7 +147,8 @@
     </table>
     <div id="empty-state" class="empty-state" style="display:none">
       <h2>No brokers yet.</h2>
-      <p>Click <strong>▶ Scrape IBBA</strong> to pull the full directory.</p>
+      <p>Click <strong>▶ Scrape IBBA</strong> to pull the full directory (~3 min).<br>Then click <strong>⚡ Enrich</strong> to add emails, phones, and specialties.</p>
+      <button class="btn btn-primary" onclick="startScrape()">▶ Scrape IBBA Now</button>
     </div>
   </div>
   <div class="pagination" id="pagination"></div>
@@ -177,28 +183,33 @@
     <div class="modal-field"><label>Notes</label><textarea id="modal-notes" placeholder="Notes…"></textarea></div>
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
-      <button class="btn btn-primary" onclick="saveEdit()">Save</button>
+      <button class="btn btn-primary"   onclick="saveEdit()">Save</button>
     </div>
   </div>
 </div>
 
 <!-- Enrich Modal -->
 <div class="modal-overlay" id="enrich-modal">
-  <div class="modal" style="width:420px">
+  <div class="modal" style="width:440px">
     <h3>⚡ Enrich Profiles</h3>
-    <p class="enrich-modal">Enriches the top N unenriched brokers matching your current <strong>state</strong> and <strong>search</strong> filters — pulling phone, email, firm, website, specialties, and bio from each IBBA profile. Specialty filter is not applied here since brokers have no specialties until enriched. ~0.8s per profile.</p>
+    <p class="modal-note">
+      Visits each broker's IBBA profile page to get phone, email, firm, website, specialties, and bio.
+      If IBBA has no email, falls back to <strong>Apollo.io</strong> lookup by name + firm.
+      Only enriches unenriched brokers matching your current state/search filter.
+      ~0.8s per profile.
+    </p>
     <div class="modal-field"><label>How many profiles?</label>
       <select id="enrich-limit">
-        <option value="25">25 profiles (~20 sec)</option>
-        <option value="50" selected>50 profiles (~1 min)</option>
-        <option value="100">100 profiles (~2 min)</option>
-        <option value="250">250 profiles (~4 min)</option>
-        <option value="500">500 profiles (~7 min)</option>
+        <option value="25">25 (~20 sec)</option>
+        <option value="50" selected>50 (~1 min)</option>
+        <option value="100">100 (~2 min)</option>
+        <option value="250">250 (~4 min)</option>
+        <option value="500">500 (~7 min)</option>
       </select>
     </div>
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="closeEnrichModal()">Cancel</button>
-      <button class="btn btn-enrich" onclick="confirmEnrich()">Start</button>
+      <button class="btn btn-enrich"    onclick="confirmEnrich()">Start</button>
     </div>
   </div>
 </div>
@@ -206,77 +217,100 @@
 <script>
 var currentPage=1, editingId=null, scrapeInterval=null, enrichInterval=null, searchTimer=null;
 
-document.getElementById("search-input").addEventListener("input",function(){clearTimeout(searchTimer);searchTimer=setTimeout(function(){loadBrokers(1)},300)});
+document.getElementById("search-input").addEventListener("input",function(){
+  clearTimeout(searchTimer); searchTimer=setTimeout(function(){loadBrokers(1)},300);
+});
 document.getElementById("state-filter").addEventListener("change",function(){loadBrokers(1)});
 document.getElementById("specialty-filter").addEventListener("change",function(){loadBrokers(1)});
 
+function esc(s){
+  if(!s) return "";
+  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
 async function loadStats(){
-  var d=await(await fetch("/api/stats")).json();
-  document.getElementById("stat-total").textContent=d.total.toLocaleString();
-  document.getElementById("stat-email").textContent=d.with_email.toLocaleString();
-  document.getElementById("stat-enriched").textContent=d.enriched.toLocaleString();
-  document.getElementById("stat-states").textContent=d.states;
+  try{
+    var d=await(await fetch("/api/stats")).json();
+    document.getElementById("stat-total").textContent    = d.total.toLocaleString();
+    document.getElementById("stat-email").textContent    = d.with_email.toLocaleString();
+    document.getElementById("stat-enriched").textContent = d.enriched.toLocaleString();
+    document.getElementById("stat-states").textContent   = d.states;
+  }catch(e){}
 }
 
 async function loadStates(){
-  var states=await(await fetch("/api/states")).json();
-  var sel=document.getElementById("state-filter");
-  while(sel.options.length>1) sel.remove(1);
-  states.forEach(function(s){var o=document.createElement("option");o.value=s;o.textContent=s;sel.appendChild(o)});
+  try{
+    var states=await(await fetch("/api/states")).json();
+    var sel=document.getElementById("state-filter");
+    var cur=sel.value;
+    while(sel.options.length>1) sel.remove(1);
+    states.forEach(function(s){
+      var o=document.createElement("option"); o.value=s; o.textContent=s; sel.appendChild(o);
+    });
+    if(cur) sel.value=cur;
+  }catch(e){}
 }
 
 async function loadSpecialties(){
-  var specs=await(await fetch("/api/specialties")).json();
-  var sel=document.getElementById("specialty-filter");
-  while(sel.options.length>1) sel.remove(1);
-  specs.forEach(function(s){var o=document.createElement("option");o.value=s;o.textContent=s;sel.appendChild(o)});
+  try{
+    var specs=await(await fetch("/api/specialties")).json();
+    var sel=document.getElementById("specialty-filter");
+    var cur=sel.value;
+    while(sel.options.length>1) sel.remove(1);
+    specs.forEach(function(s){
+      var o=document.createElement("option"); o.value=s; o.textContent=s; sel.appendChild(o);
+    });
+    if(cur) sel.value=cur;
+  }catch(e){}
 }
 
 async function loadBrokers(page){
   page=page||1; currentPage=page;
-  var search=document.getElementById("search-input").value;
-  var state=document.getElementById("state-filter").value;
-  var emailOnly=document.getElementById("email-only").checked;
-  var specialty=document.getElementById("specialty-filter").value;
-  var params=new URLSearchParams({search:search,state:state,specialty:specialty,email_only:emailOnly,page:page});
+  var search    = document.getElementById("search-input").value;
+  var state     = document.getElementById("state-filter").value;
+  var specialty = document.getElementById("specialty-filter").value;
+  var emailOnly = document.getElementById("email-only").checked;
+  var params    = new URLSearchParams({search:search,state:state,specialty:specialty,email_only:emailOnly,page:page});
   var d;
-  try {
-    var resp=await fetch("/api/brokers?"+params);
-    d=await resp.json();
-  } catch(e){ return; } // silently retry on next poll
-  var tbody=document.getElementById("broker-table");
-  var empty=document.getElementById("empty-state");
+  try{ d=await(await fetch("/api/brokers?"+params)).json(); }
+  catch(e){ return; }
 
   window._brokerMap={};
-  d.brokers.forEach(function(b){window._brokerMap[b.id]=b});
+  d.brokers.forEach(function(b){ window._brokerMap[b.id]=b; });
 
-  if(!d.brokers.length){tbody.innerHTML="";empty.style.display="block";return;}
+  var tbody = document.getElementById("broker-table");
+  var empty = document.getElementById("empty-state");
+
+  if(!d.brokers.length){
+    tbody.innerHTML=""; empty.style.display="block"; return;
+  }
   empty.style.display="none";
 
   var rows="";
   d.brokers.forEach(function(b){
-    var hasBio=b.bio&&b.bio.length>0;
-    var expandIcon=hasBio?'<span class="expand-icon" id="ei-'+b.id+'">▶</span>':'';
-    var specTags='';
+    var hasBio    = b.bio && b.bio.length>0;
+    var expandIcon= hasBio ? '<span class="expand-icon" id="ei-'+b.id+'">▶</span>' : '';
+    var specTags  = '';
     if(b.specialties){
-      b.specialties.split(',').slice(0,3).forEach(function(s){
+      var parts=b.specialties.split(',');
+      parts.slice(0,3).forEach(function(s){
         s=s.trim();
-        if(s) specTags+='<span style="display:inline-block;padding:1px 6px;border-radius:3px;font-size:9px;background:rgba(200,240,96,.1);color:var(--accent);border:1px solid rgba(200,240,96,.2);margin:1px 2px 1px 0;white-space:nowrap">'+esc(s)+'</span>';
+        if(s) specTags+='<span class="spec-tag">'+esc(s)+'</span>';
       });
-      if(b.specialties.split(',').length>3) specTags+='<span style="font-size:9px;color:var(--muted)">+'+( b.specialties.split(',').length-3)+' more</span>';
+      if(parts.length>3) specTags+='<span style="font-size:9px;color:var(--muted)">+'+(parts.length-3)+' more</span>';
     }
-    var emailCell=b.email?'<a href="mailto:'+esc(b.email)+'">'+esc(b.email)+'</a>':'<span style="color:var(--muted)">—</span>';
-    var phoneCell=b.phone?'<a href="tel:'+esc(b.phone)+'" style="color:var(--text);text-decoration:none">'+esc(b.phone)+'</a>':'<span style="color:var(--muted)">—</span>';
-    var webCell=b.website?'<a href="'+esc(b.website)+'" target="_blank" style="color:var(--accent2)">↗</a>':'<span style="color:var(--muted)">—</span>';
-    var ibbaCell=b.profile_url?'<a href="'+esc(b.profile_url)+'" target="_blank" style="color:var(--accent2);font-size:11px">↗</a>':'<span style="color:var(--muted)">—</span>';
-    var bouncer='<span class="tag tag-'+(b.bouncer_status||"unchecked")+'">'+(b.bouncer_status||"—")+'</span>';
-    var reply=b.in_reply?'<span class="tag tag-in-reply">Yes</span>':'<span style="color:var(--muted)">—</span>';
-    var editBtn='<button class="btn btn-secondary" style="padding:3px 9px;font-size:10px" onclick="event.stopPropagation();openEdit('+b.id+')">Edit</button>';
-    var rowClick=hasBio?'onclick="toggleBio('+b.id+')"':'';
+    var emailCell = b.email ? '<a href="mailto:'+esc(b.email)+'">'+esc(b.email)+'</a>' : '<span style="color:var(--muted)">—</span>';
+    var phoneCell = b.phone ? '<a href="tel:'+esc(b.phone)+'" style="color:var(--text);text-decoration:none">'+esc(b.phone)+'</a>' : '<span style="color:var(--muted)">—</span>';
+    var webCell   = b.website    ? '<a href="'+esc(b.website)+'"    target="_blank" style="color:var(--accent2)">↗</a>' : '<span style="color:var(--muted)">—</span>';
+    var ibbaCell  = b.profile_url? '<a href="'+esc(b.profile_url)+'" target="_blank" style="color:var(--accent2);font-size:11px">↗</a>' : '<span style="color:var(--muted)">—</span>';
+    var bouncer   = '<span class="tag tag-'+(b.bouncer_status||"unchecked")+'">'+(b.bouncer_status||"—")+'</span>';
+    var reply     = b.in_reply ? '<span class="tag tag-in-reply">Yes</span>' : '<span style="color:var(--muted)">—</span>';
+    var editBtn   = '<button class="btn btn-secondary" style="padding:3px 9px;font-size:10px" onclick="event.stopPropagation();openEdit('+b.id+')">Edit</button>';
+    var rowClick  = hasBio ? 'onclick="toggleBio('+b.id+')"' : '';
 
-    rows+='<tr class="data-row" '+rowClick+'>'
+    rows += '<tr class="data-row" '+rowClick+'>'
       +'<td style="padding:9px 6px 9px 14px">'+expandIcon+'</td>'
-      +'<td class="name-cell" title="'+esc(b.name)+'" style="max-width:200px;white-space:normal">'+esc(b.name)+(specTags?'<br><span style=\"line-height:1.8\">'+specTags+'</span>':'')+'</td>'
+      +'<td class="name-cell" title="'+esc(b.name)+'">'+esc(b.name)+(specTags?'<br><span style="line-height:1.8">'+specTags+'</span>':'')+'</td>'
       +'<td title="'+esc(b.firm)+'">'+(esc(b.firm)||'<span style="color:var(--muted)">—</span>')+'</td>'
       +'<td>'+esc(b.state)+'</td>'
       +'<td class="email-cell">'+emailCell+'</td>'
@@ -286,24 +320,22 @@ async function loadBrokers(page){
       +'<td>'+bouncer+'</td>'
       +'<td>'+reply+'</td>'
       +'<td>'+editBtn+'</td>'
-      +'</tr>';
-
-    // Bio expansion row — always present, hidden until toggled
-    rows+='<tr class="bio-row" id="bio-row-'+b.id+'">'
+      +'</tr>'
+      +'<tr class="bio-row" id="bio-row-'+b.id+'">'
       +'<td colspan="11"><div class="bio-inner" id="bio-'+b.id+'">'+esc(b.bio||"")+'</div></td>'
       +'</tr>';
   });
   tbody.innerHTML=rows;
-  renderPagination(d.page,d.pages,d.total);
+  renderPagination(d.page, d.pages, d.total);
 }
 
 function toggleBio(id){
   var inner=document.getElementById("bio-"+id);
-  var icon=document.getElementById("ei-"+id);
+  var icon =document.getElementById("ei-"+id);
   if(!inner) return;
-  var isOpen=inner.classList.contains("open");
-  inner.classList.toggle("open",!isOpen);
-  if(icon) icon.classList.toggle("open",!isOpen);
+  var open=inner.classList.contains("open");
+  inner.classList.toggle("open",!open);
+  if(icon) icon.classList.toggle("open",!open);
 }
 
 function renderPagination(page,pages,total){
@@ -322,96 +354,114 @@ function renderPagination(page,pages,total){
     +'</div>';
 }
 
+// ── Scrape ────────────────────────────────────────────────
 async function startScrape(){
   var btn=document.getElementById("scrape-btn");
   btn.disabled=true; btn.textContent="Running…";
   document.getElementById("scrape-bar").classList.remove("hidden");
-  await fetch("/api/scrape",{method:"POST"});
+  var resp=await fetch("/api/scrape",{method:"POST"});
+  var result=await resp.json();
+  if(result.error){
+    alert("Scrape error: "+result.error);
+    btn.disabled=false; btn.textContent="▶ Scrape IBBA";
+    document.getElementById("scrape-bar").classList.add("hidden");
+    return;
+  }
   scrapeInterval=setInterval(async function(){
-    var d=await(await fetch("/api/scrape/status")).json();
-    document.getElementById("scrape-msg").textContent=d.message;
-    if(!d.running){
-      clearInterval(scrapeInterval);
-      btn.disabled=false; btn.textContent="▶ Scrape IBBA";
-      loadBrokers(1); loadStats(); loadStates();
-      setTimeout(function(){document.getElementById("scrape-bar").classList.add("hidden")},6000);
-    }
+    try{
+      var d=await(await fetch("/api/scrape/status")).json();
+      document.getElementById("scrape-msg").textContent=d.message;
+      loadStats();
+      if(!d.running){
+        clearInterval(scrapeInterval);
+        btn.disabled=false; btn.textContent="▶ Scrape IBBA";
+        loadBrokers(1); loadStates();
+        setTimeout(function(){document.getElementById("scrape-bar").classList.add("hidden")},5000);
+      }
+    }catch(e){}
   },2000);
 }
 
+// ── Enrich ────────────────────────────────────────────────
 function openEnrichModal(){document.getElementById("enrich-modal").classList.add("open")}
 function closeEnrichModal(){document.getElementById("enrich-modal").classList.remove("open")}
 
 async function confirmEnrich(){
-  var limit=document.getElementById("enrich-limit").value;
-  var state=document.getElementById("state-filter").value;
-  var search=document.getElementById("search-input").value;
+  var limit  = parseInt(document.getElementById("enrich-limit").value);
+  var state  = document.getElementById("state-filter").value;
+  var search = document.getElementById("search-input").value;
   closeEnrichModal();
   document.getElementById("enrich-bar").classList.remove("hidden");
-  await fetch("/api/enrich",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({limit:parseInt(limit),state:state,search:search})});
+  await fetch("/api/enrich",{
+    method:"POST", headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({limit:limit, state:state, search:search})
+  });
   enrichInterval=setInterval(async function(){
-    var d=await(await fetch("/api/enrich/status")).json();
-    document.getElementById("enrich-msg").textContent=d.message;
-    if(d.total>0) document.getElementById("enrich-progress").style.width=Math.round(d.done/d.total*100)+"%";
-    if(!d.running){
-      clearInterval(enrichInterval);
-      loadBrokers(currentPage); loadStats(); loadSpecialties();
-      setTimeout(function(){
-        document.getElementById("enrich-bar").classList.add("hidden");
-        document.getElementById("enrich-progress").style.width="0%";
-      },6000);
-    }
+    try{
+      var d=await(await fetch("/api/enrich/status")).json();
+      document.getElementById("enrich-msg").textContent=d.message;
+      if(d.total>0) document.getElementById("enrich-progress").style.width=Math.round(d.done/d.total*100)+"%";
+      if(d.done%10===0 && d.done>0){ loadBrokers(currentPage); loadStats(); }
+      if(!d.running){
+        clearInterval(enrichInterval);
+        loadBrokers(currentPage); loadStats(); loadSpecialties();
+        setTimeout(function(){
+          document.getElementById("enrich-bar").classList.add("hidden");
+          document.getElementById("enrich-progress").style.width="0%";
+        },5000);
+      }
+    }catch(e){}
   },2000);
 }
 
+// ── Export ────────────────────────────────────────────────
 function exportCSV(){
-  var state=document.getElementById("state-filter").value;
-  var specialty=document.getElementById("specialty-filter").value;
-  var search=document.getElementById("search-input").value;
-  var emailOnly=document.getElementById("email-only").checked;
-  var params=new URLSearchParams({state:state,specialty:specialty,search:search,email_only:emailOnly});
+  var params=new URLSearchParams({
+    state:     document.getElementById("state-filter").value,
+    specialty: document.getElementById("specialty-filter").value,
+    search:    document.getElementById("search-input").value,
+    email_only:document.getElementById("email-only").checked
+  });
   window.location.href="/api/export?"+params;
 }
 
+// ── Edit modal ────────────────────────────────────────────
 function openEdit(id){
   var b=window._brokerMap[id];
   if(!b) return;
   editingId=b.id;
-  document.getElementById("modal-title").textContent=b.name||"Edit Broker";
-  document.getElementById("modal-name").value=b.name||"";
-  document.getElementById("modal-firm").value=b.firm||"";
-  document.getElementById("modal-email").value=b.email||"";
-  document.getElementById("modal-phone").value=b.phone||"";
-  document.getElementById("modal-state").value=b.state||"";
-  document.getElementById("modal-bouncer").value=b.bouncer_status||"unchecked";
-  document.getElementById("modal-reply").value=b.in_reply?"1":"0";
-  document.getElementById("modal-notes").value=b.notes||"";
+  document.getElementById("modal-title").textContent  = b.name||"Edit Broker";
+  document.getElementById("modal-name").value         = b.name||"";
+  document.getElementById("modal-firm").value         = b.firm||"";
+  document.getElementById("modal-email").value        = b.email||"";
+  document.getElementById("modal-phone").value        = b.phone||"";
+  document.getElementById("modal-state").value        = b.state||"";
+  document.getElementById("modal-bouncer").value      = b.bouncer_status||"unchecked";
+  document.getElementById("modal-reply").value        = b.in_reply ? "1" : "0";
+  document.getElementById("modal-notes").value        = b.notes||"";
   document.getElementById("edit-modal").classList.add("open");
 }
-
-function closeModal(){document.getElementById("edit-modal").classList.remove("open");editingId=null}
+function closeModal(){document.getElementById("edit-modal").classList.remove("open"); editingId=null;}
 
 async function saveEdit(){
   if(!editingId) return;
   await fetch("/api/brokers/"+editingId,{
-    method:"PATCH",
-    headers:{"Content-Type":"application/json"},
+    method:"PATCH", headers:{"Content-Type":"application/json"},
     body:JSON.stringify({
-      name:document.getElementById("modal-name").value,
-      firm:document.getElementById("modal-firm").value,
-      email:document.getElementById("modal-email").value,
-      phone:document.getElementById("modal-phone").value,
-      state:document.getElementById("modal-state").value,
+      name:          document.getElementById("modal-name").value,
+      firm:          document.getElementById("modal-firm").value,
+      email:         document.getElementById("modal-email").value,
+      phone:         document.getElementById("modal-phone").value,
+      state:         document.getElementById("modal-state").value,
       bouncer_status:document.getElementById("modal-bouncer").value,
-      in_reply:document.getElementById("modal-reply").value==="1",
-      notes:document.getElementById("modal-notes").value
+      in_reply:      document.getElementById("modal-reply").value==="1",
+      notes:         document.getElementById("modal-notes").value
     })
   });
   closeModal(); loadBrokers(currentPage);
 }
 
-function esc(s){if(!s)return"";return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;")}
-
+// ── Init ──────────────────────────────────────────────────
 loadStats(); loadStates(); loadSpecialties(); loadBrokers(1);
 </script>
 </body>
