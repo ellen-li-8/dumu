@@ -22,7 +22,7 @@
     input,select{background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'DM Mono',monospace;font-size:12px;padding:7px 11px;border-radius:4px;outline:none;transition:border-color .15s}
     input:focus,select:focus{border-color:var(--accent)}
     input::placeholder{color:var(--muted)}
-    .search-input{width:220px}
+    .search-input{width:200px}
     .btn{font-family:'DM Mono',monospace;font-size:11px;letter-spacing:.08em;text-transform:uppercase;padding:7px 14px;border-radius:4px;border:none;cursor:pointer;transition:all .15s;white-space:nowrap}
     .btn-primary{background:var(--accent);color:#0e0e0e;font-weight:500}
     .btn-primary:hover{background:#d4f570}
@@ -31,13 +31,17 @@
     .btn-secondary:hover{border-color:var(--accent);color:var(--accent)}
     .btn-enrich{background:transparent;color:var(--accent2);border:1px solid var(--accent2)}
     .btn-enrich:hover{background:rgba(96,200,240,.08)}
-    .btn-enrich:disabled{opacity:.4;cursor:not-allowed}
+    .btn-reply{background:transparent;color:#a78bfa;border:1px solid #a78bfa}
+    .btn-reply:hover{background:rgba(167,139,250,.08)}
+    .btn-import{background:transparent;color:#fb923c;border:1px solid #fb923c}
+    .btn-import:hover{background:rgba(251,146,60,.08)}
     .toggle-wrap{display:flex;align-items:center;gap:6px;margin-left:auto;color:var(--muted);font-size:11px;letter-spacing:.06em;text-transform:uppercase}
     input[type="checkbox"]{width:13px;height:13px;accent-color:var(--accent);padding:0}
     .status-bar{padding:9px 28px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;font-size:12px;flex-shrink:0}
     .status-bar.hidden{display:none}
     .status-bar.scrape-bar{color:var(--accent2)}
     .status-bar.enrich-bar{color:var(--accent)}
+    .status-bar.import-bar{color:#fb923c}
     .spinner{width:13px;height:13px;border:2px solid var(--border);border-top-color:currentColor;border-radius:50%;animation:spin .8s linear infinite;flex-shrink:0}
     @keyframes spin{to{transform:rotate(360deg)}}
     .main-content{flex:1;display:flex;flex-direction:column;overflow:hidden}
@@ -47,22 +51,27 @@
     th{padding:9px 14px;text-align:left;font-size:10px;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);font-weight:500;white-space:nowrap}
     tbody tr.data-row{border-bottom:none;transition:background .1s;cursor:pointer}
     tbody tr.data-row:hover{background:var(--surface2)}
-    tbody tr.bio-row{border-bottom:1px solid var(--border)}
-    tbody tr.bio-row td{padding:0}
-    .bio-inner{padding:0 14px 12px 14px;color:var(--muted);font-size:12px;line-height:1.6;max-width:900px;display:none}
-    .bio-inner.open{display:block}
+    tbody tr.expand-row{border-bottom:1px solid var(--border)}
+    tbody tr.expand-row td{padding:0}
+    .expand-inner{padding:0 14px 14px 48px;display:none}
+    .expand-inner.open{display:block}
+    .expand-section{margin-top:10px}
+    .expand-section-label{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+    .expand-bio{font-size:12px;color:var(--muted);line-height:1.6;max-width:800px}
+    .expand-specs{display:flex;flex-wrap:wrap;gap:5px}
     td{padding:9px 14px;color:var(--text);vertical-align:middle;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-    td.name-cell{font-weight:500;color:#fff;max-width:200px;white-space:normal}
+    td.name-cell{font-weight:500;color:#fff;max-width:180px;white-space:normal}
     td.email-cell a{color:var(--accent2);text-decoration:none}
     td.email-cell a:hover{text-decoration:underline}
-    .expand-icon{color:var(--muted);font-size:11px;transition:transform .2s;display:inline-block;margin-right:4px}
-    .expand-icon.open{transform:rotate(90deg)}
+    .expand-icon{color:var(--muted);font-size:10px;transition:transform .2s;display:inline-block;margin-right:4px;user-select:none}
+    .expand-icon.open{transform:rotate(90deg);color:var(--accent)}
     .tag{display:inline-block;padding:2px 7px;border-radius:3px;font-size:10px;letter-spacing:.07em;text-transform:uppercase}
     .tag-valid{background:rgba(200,240,96,.12);color:var(--accent);border:1px solid rgba(200,240,96,.25)}
     .tag-invalid{background:rgba(240,96,96,.12);color:var(--danger);border:1px solid rgba(240,96,96,.25)}
     .tag-unchecked{background:rgba(100,100,100,.15);color:var(--muted);border:1px solid var(--border)}
-    .tag-in-reply{background:rgba(96,200,240,.12);color:var(--accent2);border:1px solid rgba(96,200,240,.25)}
-    .spec-tag{display:inline-block;padding:1px 6px;border-radius:3px;font-size:9px;background:rgba(200,240,96,.1);color:var(--accent);border:1px solid rgba(200,240,96,.2);margin:1px 2px 1px 0;white-space:nowrap}
+    .tag-in-reply{background:rgba(167,139,250,.12);color:#a78bfa;border:1px solid rgba(167,139,250,.25)}
+    .spec-tag{display:inline-block;padding:2px 8px;border-radius:3px;font-size:10px;background:rgba(200,240,96,.08);color:var(--accent);border:1px solid rgba(200,240,96,.18);white-space:nowrap}
+    .spec-tag-sm{display:inline-block;padding:1px 6px;border-radius:3px;font-size:9px;background:rgba(200,240,96,.08);color:var(--accent);border:1px solid rgba(200,240,96,.15);margin:1px 2px 1px 0;white-space:nowrap}
     .empty-state{padding:60px 28px;text-align:center;color:var(--muted)}
     .empty-state h2{font-family:'Fraunces',serif;font-size:20px;font-weight:300;font-style:italic;margin-bottom:8px;color:var(--text)}
     .empty-state p{margin-bottom:20px}
@@ -85,6 +94,18 @@
     .progress-bar{height:4px;background:var(--border);border-radius:2px;overflow:hidden}
     .progress-fill{height:100%;background:var(--accent);transition:width .3s}
     .modal-note{font-size:11px;color:var(--muted);line-height:1.6;margin-bottom:14px}
+    .import-drop{border:2px dashed var(--border);border-radius:6px;padding:32px;text-align:center;color:var(--muted);cursor:pointer;transition:border-color .2s}
+    .import-drop:hover,.import-drop.dragover{border-color:var(--accent);color:var(--accent)}
+    .import-result{margin-top:12px;padding:10px 14px;border-radius:4px;font-size:12px;display:none}
+    .import-result.ok{background:rgba(200,240,96,.1);border:1px solid rgba(200,240,96,.2);color:var(--accent)}
+    .import-result.err{background:rgba(240,96,96,.1);border:1px solid rgba(240,96,96,.2);color:var(--danger)}
+    .campaign-list{max-height:200px;overflow-y:auto;margin:10px 0}
+    .campaign-item{padding:8px 12px;border:1px solid var(--border);border-radius:4px;margin-bottom:6px;cursor:pointer;transition:border-color .15s}
+    .campaign-item:hover{border-color:#a78bfa}
+    .campaign-item.selected{border-color:#a78bfa;background:rgba(167,139,250,.08)}
+    .campaign-name{font-size:12px;color:var(--text)}
+    .campaign-meta{font-size:10px;color:var(--muted);margin-top:2px}
+    .push-summary{font-size:12px;color:var(--muted);margin-top:10px;line-height:1.6}
   </style>
 </head>
 <body>
@@ -106,9 +127,11 @@
   <input type="text" class="search-input" placeholder="Search name, firm, email…" id="search-input"/>
   <select id="state-filter"><option value="">All States</option></select>
   <select id="specialty-filter"><option value="">All Specialties</option></select>
-  <button class="btn btn-primary"   id="scrape-btn"  onclick="startScrape()">▶ Scrape IBBA</button>
-  <button class="btn btn-enrich"    id="enrich-btn"  onclick="openEnrichModal()">⚡ Enrich</button>
-  <button class="btn btn-secondary"                  onclick="exportCSV()">↓ CSV</button>
+  <button class="btn btn-primary"  id="scrape-btn" onclick="startScrape()">▶ Scrape IBBA</button>
+  <button class="btn btn-enrich"   id="enrich-btn" onclick="openEnrichModal()">⚡ Enrich</button>
+  <button class="btn btn-reply"                    onclick="openReplyModal()">→ Reply.io</button>
+  <button class="btn btn-import"                   onclick="openImportModal()">↑ Import</button>
+  <button class="btn btn-secondary"                onclick="exportCSV()">↓ CSV</button>
   <label class="toggle-wrap">
     <input type="checkbox" id="email-only" onchange="loadBrokers(1)"/> Email only
   </label>
@@ -124,6 +147,9 @@
     <div class="progress-bar"><div class="progress-fill" id="enrich-progress" style="width:0%"></div></div>
   </div>
 </div>
+<div id="import-bar" class="status-bar import-bar hidden">
+  <span id="import-msg"></span>
+</div>
 
 <div class="main-content">
   <div class="table-wrap">
@@ -135,7 +161,6 @@
           <th>Firm</th>
           <th>State</th>
           <th>Email</th>
-          <th>Phone</th>
           <th>Website</th>
           <th>IBBA</th>
           <th>Email Status</th>
@@ -147,14 +172,14 @@
     </table>
     <div id="empty-state" class="empty-state" style="display:none">
       <h2>No brokers yet.</h2>
-      <p>Click <strong>▶ Scrape IBBA</strong> to pull the full directory (~3 min).<br>Then click <strong>⚡ Enrich</strong> to add emails, phones, and specialties.</p>
+      <p>Click <strong>▶ Scrape IBBA</strong> to pull the full directory (~3 min).<br>Then click <strong>⚡ Enrich</strong> to add emails and specialties.</p>
       <button class="btn btn-primary" onclick="startScrape()">▶ Scrape IBBA Now</button>
     </div>
   </div>
   <div class="pagination" id="pagination"></div>
 </div>
 
-<!-- Edit Modal -->
+<!-- ── Edit Modal ── -->
 <div class="modal-overlay" id="edit-modal">
   <div class="modal">
     <h3 id="modal-title">Edit Broker</h3>
@@ -188,16 +213,11 @@
   </div>
 </div>
 
-<!-- Enrich Modal -->
+<!-- ── Enrich Modal ── -->
 <div class="modal-overlay" id="enrich-modal">
   <div class="modal" style="width:440px">
     <h3>⚡ Enrich Profiles</h3>
-    <p class="modal-note">
-      Visits each broker's IBBA profile page to get phone, email, firm, website, specialties, and bio.
-      If IBBA has no email, falls back to <strong>Apollo.io</strong> lookup by name + firm.
-      Only enriches unenriched brokers matching your current state/search filter.
-      ~0.8s per profile.
-    </p>
+    <p class="modal-note">Visits each IBBA profile page to get email, firm, website, specialties, and bio. If IBBA has no email, falls back to <strong>Apollo.io</strong>. Only processes unenriched brokers matching your current state/search filter.</p>
     <div class="modal-field"><label>How many profiles?</label>
       <select id="enrich-limit">
         <option value="25">25 (~20 sec)</option>
@@ -214,8 +234,46 @@
   </div>
 </div>
 
+<!-- ── Reply.io Modal ── -->
+<div class="modal-overlay" id="reply-modal">
+  <div class="modal" style="width:500px">
+    <h3>→ Push to Reply.io Campaign</h3>
+    <p class="modal-note">Pushes all brokers with emails from your <strong>current filtered view</strong> into a Reply.io sequence. Only brokers with email addresses are included. Brokers already in Reply.io are skipped.</p>
+    <div class="modal-field">
+      <label>Select Campaign</label>
+      <div id="campaign-list" class="campaign-list">
+        <div style="color:var(--muted);font-size:12px;padding:8px">Loading campaigns…</div>
+      </div>
+    </div>
+    <div id="push-summary" class="push-summary" style="display:none"></div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeReplyModal()">Cancel</button>
+      <button class="btn btn-reply" id="push-btn" onclick="pushToReply()" disabled>Push Contacts</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Import Modal ── -->
+<div class="modal-overlay" id="import-modal">
+  <div class="modal" style="width:480px">
+    <h3>↑ Import Broker List</h3>
+    <p class="modal-note">Upload a CSV with broker contacts. Duplicates are automatically skipped by matching on <strong>email</strong> (exact) or <strong>name + firm</strong> (fuzzy). Expected columns: Name, Email, Firm/Company, State, Phone.</p>
+    <div class="import-drop" id="import-drop" onclick="document.getElementById('import-file').click()">
+      <div style="font-size:24px;margin-bottom:8px">↑</div>
+      <div>Click to choose a CSV file</div>
+      <div style="font-size:10px;margin-top:4px;opacity:.6">or drag and drop here</div>
+      <input type="file" id="import-file" accept=".csv" style="display:none" onchange="handleImportFile(this.files[0])"/>
+    </div>
+    <div id="import-result" class="import-result"></div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeImportModal()">Close</button>
+    </div>
+  </div>
+</div>
+
 <script>
 var currentPage=1, editingId=null, scrapeInterval=null, enrichInterval=null, searchTimer=null;
+var selectedCampaignId=null;
 
 document.getElementById("search-input").addEventListener("input",function(){
   clearTimeout(searchTimer); searchTimer=setTimeout(function(){loadBrokers(1)},300);
@@ -241,12 +299,9 @@ async function loadStats(){
 async function loadStates(){
   try{
     var states=await(await fetch("/api/states")).json();
-    var sel=document.getElementById("state-filter");
-    var cur=sel.value;
+    var sel=document.getElementById("state-filter"), cur=sel.value;
     while(sel.options.length>1) sel.remove(1);
-    states.forEach(function(s){
-      var o=document.createElement("option"); o.value=s; o.textContent=s; sel.appendChild(o);
-    });
+    states.forEach(function(s){var o=document.createElement("option");o.value=s;o.textContent=s;sel.appendChild(o)});
     if(cur) sel.value=cur;
   }catch(e){}
 }
@@ -254,83 +309,93 @@ async function loadStates(){
 async function loadSpecialties(){
   try{
     var specs=await(await fetch("/api/specialties")).json();
-    var sel=document.getElementById("specialty-filter");
-    var cur=sel.value;
+    var sel=document.getElementById("specialty-filter"), cur=sel.value;
     while(sel.options.length>1) sel.remove(1);
-    specs.forEach(function(s){
-      var o=document.createElement("option"); o.value=s; o.textContent=s; sel.appendChild(o);
-    });
+    specs.forEach(function(s){var o=document.createElement("option");o.value=s;o.textContent=s;sel.appendChild(o)});
     if(cur) sel.value=cur;
   }catch(e){}
 }
 
 async function loadBrokers(page){
   page=page||1; currentPage=page;
-  var search    = document.getElementById("search-input").value;
-  var state     = document.getElementById("state-filter").value;
-  var specialty = document.getElementById("specialty-filter").value;
-  var emailOnly = document.getElementById("email-only").checked;
-  var params    = new URLSearchParams({search:search,state:state,specialty:specialty,email_only:emailOnly,page:page});
+  var search=document.getElementById("search-input").value;
+  var state=document.getElementById("state-filter").value;
+  var specialty=document.getElementById("specialty-filter").value;
+  var emailOnly=document.getElementById("email-only").checked;
+  var params=new URLSearchParams({search:search,state:state,specialty:specialty,email_only:emailOnly,page:page});
   var d;
-  try{ d=await(await fetch("/api/brokers?"+params)).json(); }
-  catch(e){ return; }
+  try{ d=await(await fetch("/api/brokers?"+params)).json(); }catch(e){ return; }
 
   window._brokerMap={};
   d.brokers.forEach(function(b){ window._brokerMap[b.id]=b; });
 
-  var tbody = document.getElementById("broker-table");
-  var empty = document.getElementById("empty-state");
-
-  if(!d.brokers.length){
-    tbody.innerHTML=""; empty.style.display="block"; return;
-  }
+  var tbody=document.getElementById("broker-table");
+  var empty=document.getElementById("empty-state");
+  if(!d.brokers.length){ tbody.innerHTML=""; empty.style.display="block"; return; }
   empty.style.display="none";
 
   var rows="";
   d.brokers.forEach(function(b){
-    var hasBio    = b.bio && b.bio.length>0;
-    var expandIcon= hasBio ? '<span class="expand-icon" id="ei-'+b.id+'">▶</span>' : '';
-    var specTags  = '';
+    // Expand row shows specialties + bio — trigger only if either exists
+    var hasExpand = (b.specialties && b.specialties.length>0) || (b.bio && b.bio.length>0);
+    var expandIcon = hasExpand ? '<span class="expand-icon" id="ei-'+b.id+'">▶</span>' : '';
+
+    // Show first 2 spec tags inline under name
+    var specTagsInline='';
     if(b.specialties){
       var parts=b.specialties.split(',');
-      parts.slice(0,3).forEach(function(s){
+      parts.slice(0,2).forEach(function(s){
         s=s.trim();
-        if(s) specTags+='<span class="spec-tag">'+esc(s)+'</span>';
+        if(s) specTagsInline+='<span class="spec-tag-sm">'+esc(s)+'</span>';
       });
-      if(parts.length>3) specTags+='<span style="font-size:9px;color:var(--muted)">+'+(parts.length-3)+' more</span>';
+      if(parts.length>2) specTagsInline+='<span style="font-size:9px;color:var(--muted)">+'+(parts.length-2)+'</span>';
     }
+
+    // Expanded content: full specialties list + bio
+    var expandContent='<div class="expand-inner" id="exp-'+b.id+'">';
+    if(b.specialties){
+      expandContent+='<div class="expand-section"><div class="expand-section-label">Specialty Areas</div><div class="expand-specs">';
+      b.specialties.split(',').forEach(function(s){
+        s=s.trim(); if(s) expandContent+='<span class="spec-tag">'+esc(s)+'</span>';
+      });
+      expandContent+='</div></div>';
+    }
+    if(b.bio){
+      expandContent+='<div class="expand-section" style="margin-top:12px"><div class="expand-section-label">About</div><div class="expand-bio">'+esc(b.bio)+'</div></div>';
+    }
+    expandContent+='</div>';
+
     var emailCell = b.email ? '<a href="mailto:'+esc(b.email)+'">'+esc(b.email)+'</a>' : '<span style="color:var(--muted)">—</span>';
-    var phoneCell = b.phone ? '<a href="tel:'+esc(b.phone)+'" style="color:var(--text);text-decoration:none">'+esc(b.phone)+'</a>' : '<span style="color:var(--muted)">—</span>';
-    var webCell   = b.website    ? '<a href="'+esc(b.website)+'"    target="_blank" style="color:var(--accent2)">↗</a>' : '<span style="color:var(--muted)">—</span>';
-    var ibbaCell  = b.profile_url? '<a href="'+esc(b.profile_url)+'" target="_blank" style="color:var(--accent2);font-size:11px">↗</a>' : '<span style="color:var(--muted)">—</span>';
+    var webCell   = b.website     ? '<a href="'+esc(b.website)+'"     target="_blank" style="color:var(--accent2)">↗</a>' : '<span style="color:var(--muted)">—</span>';
+    var ibbaCell  = b.profile_url ? '<a href="'+esc(b.profile_url)+'" target="_blank" style="color:var(--accent2);font-size:11px">↗</a>' : '<span style="color:var(--muted)">—</span>';
     var bouncer   = '<span class="tag tag-'+(b.bouncer_status||"unchecked")+'">'+(b.bouncer_status||"—")+'</span>';
-    var reply     = b.in_reply ? '<span class="tag tag-in-reply">Yes</span>' : '<span style="color:var(--muted)">—</span>';
+    var reply     = b.in_reply ? '<span class="tag tag-in-reply">In Reply</span>' : '<span style="color:var(--muted)">—</span>';
     var editBtn   = '<button class="btn btn-secondary" style="padding:3px 9px;font-size:10px" onclick="event.stopPropagation();openEdit('+b.id+')">Edit</button>';
-    var rowClick  = hasBio ? 'onclick="toggleBio('+b.id+')"' : '';
+    var rowClick  = hasExpand ? 'onclick="toggleExpand('+b.id+')"' : '';
 
     rows += '<tr class="data-row" '+rowClick+'>'
       +'<td style="padding:9px 6px 9px 14px">'+expandIcon+'</td>'
-      +'<td class="name-cell" title="'+esc(b.name)+'">'+esc(b.name)+(specTags?'<br><span style="line-height:1.8">'+specTags+'</span>':'')+'</td>'
+      +'<td class="name-cell" title="'+esc(b.name)+'">'+esc(b.name)
+        +(specTagsInline ? '<br><span style="line-height:1.8">'+specTagsInline+'</span>' : '')+'</td>'
       +'<td title="'+esc(b.firm)+'">'+(esc(b.firm)||'<span style="color:var(--muted)">—</span>')+'</td>'
       +'<td>'+esc(b.state)+'</td>'
       +'<td class="email-cell">'+emailCell+'</td>'
-      +'<td>'+phoneCell+'</td>'
       +'<td>'+webCell+'</td>'
       +'<td>'+ibbaCell+'</td>'
       +'<td>'+bouncer+'</td>'
       +'<td>'+reply+'</td>'
       +'<td>'+editBtn+'</td>'
       +'</tr>'
-      +'<tr class="bio-row" id="bio-row-'+b.id+'">'
-      +'<td colspan="11"><div class="bio-inner" id="bio-'+b.id+'">'+esc(b.bio||"")+'</div></td>'
+      +'<tr class="expand-row" id="exp-row-'+b.id+'">'
+      +'<td colspan="10">'+expandContent+'</td>'
       +'</tr>';
   });
   tbody.innerHTML=rows;
   renderPagination(d.page, d.pages, d.total);
 }
 
-function toggleBio(id){
-  var inner=document.getElementById("bio-"+id);
+function toggleExpand(id){
+  var inner=document.getElementById("exp-"+id);
   var icon =document.getElementById("ei-"+id);
   if(!inner) return;
   var open=inner.classList.contains("open");
@@ -343,9 +408,8 @@ function renderPagination(page,pages,total){
   if(pages<=1){el.innerHTML="";return;}
   var start=(page-1)*50+1, end=Math.min(page*50,total);
   var nums="";
-  for(var p=Math.max(1,page-3);p<=Math.min(pages,page+3);p++){
+  for(var p=Math.max(1,page-3);p<=Math.min(pages,page+3);p++)
     nums+='<button class="page-btn'+(p===page?" active":"")+'" onclick="loadBrokers('+p+')">'+p+'</button>';
-  }
   el.innerHTML='<span class="page-info">Showing '+start+'–'+end+' of '+total.toLocaleString()+'</span>'
     +'<div class="page-btns">'
     +'<button class="page-btn" onclick="loadBrokers('+(page-1)+')" '+(page===1?"disabled":"")+'>←</button>'
@@ -354,7 +418,7 @@ function renderPagination(page,pages,total){
     +'</div>';
 }
 
-// ── Scrape ────────────────────────────────────────────────
+// ── Scrape ──
 async function startScrape(){
   var btn=document.getElementById("scrape-btn");
   btn.disabled=true; btn.textContent="Running…";
@@ -382,20 +446,17 @@ async function startScrape(){
   },2000);
 }
 
-// ── Enrich ────────────────────────────────────────────────
+// ── Enrich ──
 function openEnrichModal(){document.getElementById("enrich-modal").classList.add("open")}
 function closeEnrichModal(){document.getElementById("enrich-modal").classList.remove("open")}
 
 async function confirmEnrich(){
-  var limit  = parseInt(document.getElementById("enrich-limit").value);
-  var state  = document.getElementById("state-filter").value;
-  var search = document.getElementById("search-input").value;
+  var limit=parseInt(document.getElementById("enrich-limit").value);
+  var state=document.getElementById("state-filter").value;
+  var search=document.getElementById("search-input").value;
   closeEnrichModal();
   document.getElementById("enrich-bar").classList.remove("hidden");
-  await fetch("/api/enrich",{
-    method:"POST", headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({limit:limit, state:state, search:search})
-  });
+  await fetch("/api/enrich",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({limit:limit,state:state,search:search})});
   enrichInterval=setInterval(async function(){
     try{
       var d=await(await fetch("/api/enrich/status")).json();
@@ -414,7 +475,120 @@ async function confirmEnrich(){
   },2000);
 }
 
-// ── Export ────────────────────────────────────────────────
+// ── Reply.io ──
+async function openReplyModal(){
+  selectedCampaignId=null;
+  document.getElementById("push-btn").disabled=true;
+  document.getElementById("push-summary").style.display="none";
+  document.getElementById("reply-modal").classList.add("open");
+  var list=document.getElementById("campaign-list");
+  list.innerHTML='<div style="color:var(--muted);font-size:12px;padding:8px">Loading campaigns…</div>';
+  try{
+    var d=await(await fetch("/api/replyio/campaigns")).json();
+    if(d.error){ list.innerHTML='<div style="color:var(--danger);font-size:12px;padding:8px">'+esc(d.error)+'</div>'; return; }
+    var campaigns=d.campaigns||d||[];
+    if(!campaigns.length){ list.innerHTML='<div style="color:var(--muted);font-size:12px;padding:8px">No campaigns found in Reply.io.</div>'; return; }
+    list.innerHTML="";
+    campaigns.forEach(function(c){
+      var div=document.createElement("div");
+      div.className="campaign-item";
+      div.innerHTML='<div class="campaign-name">'+esc(c.name||c.title||"Unnamed")+'</div>'
+        +'<div class="campaign-meta">ID: '+esc(String(c.id))+(c.status?' · '+esc(c.status):'')+'</div>';
+      div.onclick=function(){
+        document.querySelectorAll(".campaign-item").forEach(function(el){el.classList.remove("selected")});
+        div.classList.add("selected");
+        selectedCampaignId=c.id;
+        document.getElementById("push-btn").disabled=false;
+      };
+      list.appendChild(div);
+    });
+  }catch(e){
+    list.innerHTML='<div style="color:var(--danger);font-size:12px;padding:8px">Failed to load campaigns. Check REPLYIO_API_KEY in Railway variables.</div>';
+  }
+}
+function closeReplyModal(){document.getElementById("reply-modal").classList.remove("open")}
+
+async function pushToReply(){
+  if(!selectedCampaignId) return;
+  var btn=document.getElementById("push-btn");
+  btn.disabled=true; btn.textContent="Pushing…";
+  var summary=document.getElementById("push-summary");
+  summary.style.display="none";
+  try{
+    var resp=await fetch("/api/replyio/push",{
+      method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({
+        campaign_id: selectedCampaignId,
+        state:   document.getElementById("state-filter").value,
+        specialty: document.getElementById("specialty-filter").value,
+        search:  document.getElementById("search-input").value
+      })
+    });
+    var d=await resp.json();
+    if(d.error){
+      summary.innerHTML='<span style="color:var(--danger)">Error: '+esc(d.error)+'</span>';
+    } else {
+      summary.innerHTML='✓ Pushed <strong>'+d.pushed+'</strong> of '+d.total+' contacts to campaign.'
+        +(d.errors&&d.errors.length ? ' '+d.errors.length+' failed.' : '');
+    }
+    summary.style.display="block";
+    loadBrokers(currentPage);
+  }catch(e){
+    summary.innerHTML='<span style="color:var(--danger)">Request failed.</span>';
+    summary.style.display="block";
+  }
+  btn.disabled=false; btn.textContent="Push Contacts";
+}
+
+// ── Import ──
+function openImportModal(){
+  document.getElementById("import-result").style.display="none";
+  document.getElementById("import-file").value="";
+  document.getElementById("import-modal").classList.add("open");
+}
+function closeImportModal(){document.getElementById("import-modal").classList.remove("open")}
+
+var importDrop=document.getElementById("import-drop");
+importDrop.addEventListener("dragover",function(e){e.preventDefault();importDrop.classList.add("dragover")});
+importDrop.addEventListener("dragleave",function(){importDrop.classList.remove("dragover")});
+importDrop.addEventListener("drop",function(e){
+  e.preventDefault(); importDrop.classList.remove("dragover");
+  if(e.dataTransfer.files[0]) handleImportFile(e.dataTransfer.files[0]);
+});
+
+async function handleImportFile(file){
+  if(!file||!file.name.endsWith(".csv")){
+    showImportResult("error","Please upload a .csv file.");
+    return;
+  }
+  showImportResult("ok","Uploading "+file.name+"…");
+  var fd=new FormData(); fd.append("file",file);
+  try{
+    var resp=await fetch("/api/import",{method:"POST",body:fd});
+    var d=await resp.json();
+    if(d.error){
+      showImportResult("error","Import failed: "+d.error);
+    } else {
+      showImportResult("ok",
+        "✓ Imported "+d.imported+" brokers. "
+        +d.duplicates_skipped+" duplicates skipped. "
+        +"("+d.total_rows+" rows total)"
+      );
+      loadBrokers(1); loadStats(); loadStates();
+    }
+  }catch(e){
+    showImportResult("error","Upload failed: "+e.message);
+  }
+}
+
+function showImportResult(type,msg){
+  var el=document.getElementById("import-result");
+  el.className="import-result "+(type==="error"?"err":"ok");
+  el.textContent=msg;
+  el.style.display="block";
+}
+
+// ── Export ──
 function exportCSV(){
   var params=new URLSearchParams({
     state:     document.getElementById("state-filter").value,
@@ -425,28 +599,27 @@ function exportCSV(){
   window.location.href="/api/export?"+params;
 }
 
-// ── Edit modal ────────────────────────────────────────────
+// ── Edit modal ──
 function openEdit(id){
-  var b=window._brokerMap[id];
-  if(!b) return;
+  var b=window._brokerMap[id]; if(!b) return;
   editingId=b.id;
-  document.getElementById("modal-title").textContent  = b.name||"Edit Broker";
-  document.getElementById("modal-name").value         = b.name||"";
-  document.getElementById("modal-firm").value         = b.firm||"";
-  document.getElementById("modal-email").value        = b.email||"";
-  document.getElementById("modal-phone").value        = b.phone||"";
-  document.getElementById("modal-state").value        = b.state||"";
-  document.getElementById("modal-bouncer").value      = b.bouncer_status||"unchecked";
-  document.getElementById("modal-reply").value        = b.in_reply ? "1" : "0";
-  document.getElementById("modal-notes").value        = b.notes||"";
+  document.getElementById("modal-title").textContent = b.name||"Edit Broker";
+  document.getElementById("modal-name").value  = b.name||"";
+  document.getElementById("modal-firm").value  = b.firm||"";
+  document.getElementById("modal-email").value = b.email||"";
+  document.getElementById("modal-phone").value = b.phone||"";
+  document.getElementById("modal-state").value = b.state||"";
+  document.getElementById("modal-bouncer").value= b.bouncer_status||"unchecked";
+  document.getElementById("modal-reply").value = b.in_reply?"1":"0";
+  document.getElementById("modal-notes").value = b.notes||"";
   document.getElementById("edit-modal").classList.add("open");
 }
-function closeModal(){document.getElementById("edit-modal").classList.remove("open"); editingId=null;}
+function closeModal(){document.getElementById("edit-modal").classList.remove("open");editingId=null;}
 
 async function saveEdit(){
   if(!editingId) return;
   await fetch("/api/brokers/"+editingId,{
-    method:"PATCH", headers:{"Content-Type":"application/json"},
+    method:"PATCH",headers:{"Content-Type":"application/json"},
     body:JSON.stringify({
       name:          document.getElementById("modal-name").value,
       firm:          document.getElementById("modal-firm").value,
@@ -461,7 +634,7 @@ async function saveEdit(){
   closeModal(); loadBrokers(currentPage);
 }
 
-// ── Init ──────────────────────────────────────────────────
+// ── Init ──
 loadStats(); loadStates(); loadSpecialties(); loadBrokers(1);
 </script>
 </body>
