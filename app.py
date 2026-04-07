@@ -776,45 +776,20 @@ def debug():
     except Exception as e:
         return jsonify({"error":str(e)})
 
-def _auto_scrape_and_enrich():
-    """On startup, wait for DB, then auto-scrape and enrich if the table is empty."""
-    # Wait for DB to become available (retry every 3s for up to 60s)
+# Try to connect and init DB in background so gunicorn can bind the port immediately
+def _startup_db_check():
     for _ in range(20):
         if check_db():
-            break
+            try:
+                init_db()
+                print("Database connected and initialized.")
+            except Exception as e:
+                print(f"Database init failed: {e}")
+            return
         time.sleep(3)
-    else:
-        print("Could not connect to database after 60s — giving up auto-scrape.")
-        return
+    print("Could not connect to database after 60s — API routes will return 503 until DB is reachable.")
 
-    init_db()
-
-    # Check if brokers table is empty
-    try:
-        conn = get_db()
-        cur = conn.cursor()
-        cur.execute("SELECT COUNT(*) FROM brokers")
-        count = cur.fetchone()[0]
-        cur.close()
-        conn.close()
-    except Exception as e:
-        print(f"Auto-scrape check failed: {e}")
-        return
-
-    if count > 0:
-        print(f"Database already has {count} brokers — skipping auto-scrape.")
-        return
-
-    print("Database is empty — starting auto-scrape...")
-    scrape_ibba()
-    print("Auto-scrape complete — starting IBBA profile enrichment...")
-    enrich_profiles_worker(limit=10000)
-    print("IBBA enrichment complete — starting web enrichment for missing data...")
-    web_enrich_worker()
-    print("All enrichment complete.")
-
-# Run in background so gunicorn can bind the port immediately for healthcheck
-threading.Thread(target=_auto_scrape_and_enrich, daemon=True).start()
+threading.Thread(target=_startup_db_check, daemon=True).start()
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
